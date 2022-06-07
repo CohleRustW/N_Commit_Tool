@@ -20,3 +20,6 @@
 1. local branch name regex: r".\*issue#?\d+.*"
 2. gh 鉴权
 3. issue 内的 bug 统一提交时替换为 bugfix
+
+#### 问题
+1. ``MAC OS``会报错开发者异常，只要在``访达``中打开一次就行
