@@ -93,12 +93,22 @@ fn main() {
             }
         }
     }
+    // "-m" show maximum number of issues to fetch
     if let Ok(result) = Command::new("gh")
-        .args(["issue", "list", "--json", "number,title"])
+        .args(["issue", "list", "--json", "number,title", "-L", "200"])
         .output()
     {
         if let Ok(d) = str::from_utf8(&result.stdout) {
             let mut b_n_vec: Vec<usize> = Vec::new();
+            let _load_json: Vec<Foo>;
+            match serde_json::from_str::<Vec<Foo>>(d) {
+                Ok(v) => {
+                    _load_json = v;
+                }
+                Err(e) => {
+                    red!("parse issue json failed ->{}", e);
+                }
+            }
             let load_json: Vec<Foo> = serde_json::from_str(&d).unwrap();
             if let Ok(result) = get_branch() {
                 let branch = String::from_utf8_lossy(&result);
@@ -156,21 +166,21 @@ fn main() {
                                                 }
                                             }
                                             None => {
-                                                println!("提交失败, 未获取对应返回码");
+                                                red!("提交失败, 未获取对应返回码");
                                                 std::process::exit(1);
                                             }
                                         }
                                     } else {
-                                        println!("{} failed !", c);
+                                        red!("{} failed !", c);
                                     }
                                 } else {
-                                    println!("miss title re");
+                                    red!("miss title re");
                                     std::process::exit(1);
                                 }
                             }
                         }
                     } else {
-                        println!("branch number not in issue list ");
+                        red!("branch number not in issue list");
                         std::process::exit(1);
                     }
                 } else {
