@@ -2,9 +2,13 @@ use clap::Parser;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Result, Value};
+use core::num;
 use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
+use inquire::{Text, validator::{StringValidator, Validation}};
+use inquire::{error::InquireError, Select};
+use version_compare::{Cmp, Version};
 #[macro_use]
 extern crate colour;
 
@@ -38,6 +42,17 @@ pub struct Args {
         default_value = "false"
     )]
     web: String,
+
+    #[clap(
+        short = 'n',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    new_branch: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,6 +66,21 @@ fn get_branch() -> CResult<Vec<u8>, Box<std::io::Error>> {
         .args(["branch", "--show-current"])
         .output()?;
     Ok(branch.stdout)
+}
+
+fn biggerst_version_number (version_list: Vec<String>) -> (String, usize) {
+    let mut version_numer: String = String::new();
+    let numer_version_list = version_list.clone();
+    for version in version_list {
+        let a = Version::from(&version).unwrap();
+        let b = Version::from(&version_numer).unwrap();
+        if a > b {
+            version_numer = version.to_string();
+        }
+    }
+    let number_index = numer_version_list.iter().position(|x| x == &version_numer).unwrap();
+    (version_numer,  number_index)
+
 }
 
 fn is_element_in_vec(a: &usize, v: &Vec<usize>) -> bool {
@@ -75,11 +105,46 @@ fn lower_and_bug_head_replace(source: &str) -> String {
     }
 }
 
-// fn load_json (json: &str) -> Result<Vec<Foo>> {
+fn branch_prefix_strip(branch_name: &str) -> String {
+    let mut branch_name = branch_name.to_string();
+    if branch_name.starts_with("* ") || branch_name.starts_with("") && branch_name.len() > 1 {
+        branch_name = branch_name[2..].to_string();
+    }
+    branch_name
+}
 
-//     let load_json = serde_json::from_str(json)?;
-//     Ok(load_json)
-// }
+#[warn(unused_assignments)]
+fn get_latest_issue() -> (String, Vec<String>) {
+    let mut re_branchs: Vec<String> = Vec::new();
+    let mut all_branchs: Vec<String> = Vec::new();
+    let mut branch_pure_number: Vec<String> = Vec::new();
+    let nodeman_re: Regex = Regex::new(r"V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc").unwrap();
+    // let nodeman_re: Regex = Regex::new(r"list").unwrap();
+    let branchs = Command::new("git").args(["branch",  "-l"]).output().unwrap();
+    let branch_vec  =  String::from_utf8_lossy(&branchs.stdout);
+    let c: Vec<&str> = branch_vec.split("\n").collect();
+
+    for branch in c {
+        let branch_strip = branch_prefix_strip(branch);
+        all_branchs.push(branch_strip.clone());
+        if nodeman_re.is_match(&branch_strip) {
+            let numer_re = nodeman_re.captures(&branch_strip).unwrap();
+            let version_numer: &str = numer_re.get(1).unwrap().as_str();
+            branch_pure_number.push(version_numer.to_string());
+            re_branchs.push(branch_strip);
+        }
+    }
+    blue!("match branch list -> {:?}, then choice biggerst version!\n", re_branchs);
+    if re_branchs.is_empty() {
+        red!("no match branch\n");
+        std::process::exit(1);
+    }
+    let mut _latest_re_branch: String = String::new();
+    let mut _latest_re_branch_index: usize;
+    (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
+    (format!("V{}-rc", _latest_re_branch), all_branchs)
+}
+
 
 fn main() {
     let args = Args::parse();
@@ -98,10 +163,10 @@ fn main() {
         .args(["issue", "list", "--json", "number,title", "-L", "200"])
         .output()
     {
-        if let Ok(d) = str::from_utf8(&result.stdout) {
+        if let Ok(branchs) = str::from_utf8(&result.stdout) {
             let mut b_n_vec: Vec<usize> = Vec::new();
             let _load_json: Vec<Foo>;
-            match serde_json::from_str::<Vec<Foo>>(d) {
+            match serde_json::from_str::<Vec<Foo>>(branchs) {
                 Ok(v) => {
                     _load_json = v;
                 }
@@ -109,14 +174,71 @@ fn main() {
                     red!("parse issue json failed ->{}", e);
                 }
             }
-            let load_json: Vec<Foo> = serde_json::from_str(&d).unwrap();
+            let load_json: Vec<Foo> = serde_json::from_str(&branchs).unwrap();
+
+            //  interactive select issue
+            if args.new_branch == "true" {
+                let mut issue_msgs: Vec<&str> = Vec::new();
+                let mut issue_numbers: Vec<usize> = Vec::new();
+                for issue in load_json.iter() {
+                    let issue_pure_re: Regex = Regex::new(r"\[(.*)\](.*)").unwrap();
+                    if issue_pure_re.is_match(&issue.title) {
+                        let issue_pure = issue_pure_re.captures(&issue.title).unwrap();
+                        let pure_msg = issue_pure.get(2).unwrap().as_str();
+                        issue_msgs.push(pure_msg);
+                        issue_numbers.push(issue.number);
+                    }
+                }
+                let copy_issue = issue_msgs.clone();
+                if issue_msgs.len() != 0 {
+                    // let ans = Select::new("What's your issue want to?", issue_msgs).prompt();
+                    if let Ok(choice) = Select::new("What's your issue want to?", issue_msgs).prompt() {
+                        green!("Choice issue -> {}\n", &choice);
+                        let index = copy_issue.iter().position(|&r| r == choice).unwrap();
+                        let choice_issue_number = issue_numbers[index];
+                        let (latest_issue , all_branchs )= get_latest_issue();
+
+                        let new_branch = format!("test_issue#{}", choice_issue_number);
+
+                        if all_branchs.contains(&&new_branch) {
+                            red!("branch {} already exist, checkout!!!\n", new_branch);
+                            if let Ok(checkout_result) = Command::new("git").args(["checkout", &new_branch]).output() {
+                                let code = checkout_result.status.code();
+                                if code == Some(0) {
+                                    green!("checkout to branch {}\n", &new_branch);
+                                } else {
+                                    red!("checkout branch filed! \n{}", str::from_utf8(&checkout_result.stdout).unwrap());
+                                    std::process::exit(1);
+                                }
+                            }
+                            std::process::exit(1);
+                        }
+
+                        if let Ok(add_branch_result) = Command::new("git")
+                            .args(["checkout", "-b" , &new_branch,  &latest_issue])
+                            .output()
+                        {
+                            let code = add_branch_result.status.code();
+                            if code == Some(0) {
+                                green!("checkout branch by command -> git checkout -b {} {}, bash branch -> {}\n", new_branch, latest_issue, latest_issue);
+                            } else {
+                                red!("checkout branch filed! \n{}", str::from_utf8(&add_branch_result.stdout).unwrap());
+                                std::process::exit(1);
+                            }
+                        }
+
+                    }
+
+                std::process::exit(0)
+                }
+            }
+
             if let Ok(result) = get_branch() {
                 let branch = String::from_utf8_lossy(&result);
                 let issue_re: Regex = Regex::new(r".*issue#?(\d+).*").unwrap();
                 if issue_re.is_match(&branch) {
                     let re_result = issue_re.captures(&branch).unwrap();
                     let branch_number = &re_result[1];
-                    // println!("{:?}", branch_number);
                     let usize_branch = branch_number.parse::<usize>().unwrap();
                     for issue in load_json.iter() {
                         b_n_vec.push(issue.number);
