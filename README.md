@@ -18,6 +18,8 @@
 
 <img width="976" alt="企业微信截图_f403a8f5-7b97-4c7b-8617-e5ebc190e81c" src="https://user-images.githubusercontent.com/40767043/196132518-30fb1452-ef66-4bae-bab2-bec96c0aaa83.png">
 
+8. ``-n -c``, 命令行交互式选择``ISSUES``, 并且自动 `fetch` `origin` 分支, 交互式选择新增分支对应的 ``base branch`` 
+
 
 #### 姿势
 1. local branch name regex: r".\*issue#?\d+.*"

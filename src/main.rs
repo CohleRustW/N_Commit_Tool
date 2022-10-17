@@ -3,7 +3,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Result, Value};
 use core::num;
-use std::process::Command;
+use std::{process::Command, sync::Arc};
 use std::result::Result as CResult;
 use std::str;
 use inquire::{Text, validator::{StringValidator, Validation}};
@@ -11,6 +11,8 @@ use inquire::{error::InquireError, Select};
 use version_compare::{Cmp, Version};
 #[macro_use]
 extern crate colour;
+
+static REMOTE_NAME: &'static str = "origin";
 
 #[derive(Parser, Debug)]
 #[clap(author, about, long_about = None)]
@@ -53,6 +55,17 @@ pub struct Args {
         default_value = "false"
     )]
     new_branch: String,
+
+    #[clap(
+        short = 'c',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    chooise: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -114,19 +127,36 @@ fn branch_prefix_strip(branch_name: &str) -> String {
 }
 
 #[warn(unused_assignments)]
-fn get_latest_issue() -> (String, Vec<String>) {
+fn get_latest_issue(choice: bool) -> (String, Vec<String>) {
     let mut re_branchs: Vec<String> = Vec::new();
     let mut all_branchs: Vec<String> = Vec::new();
     let mut branch_pure_number: Vec<String> = Vec::new();
     let nodeman_re: Regex = Regex::new(r"V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc").unwrap();
-    // let nodeman_re: Regex = Regex::new(r"list").unwrap();
-    let branchs = Command::new("git").args(["branch",  "-l"]).output().unwrap();
-    let branch_vec  =  String::from_utf8_lossy(&branchs.stdout);
-    let c: Vec<&str> = branch_vec.split("\n").collect();
+    if let Ok(fetch_result) = Command::new("git").args(["fetch", REMOTE_NAME]).output() {
+        if fetch_result.status.success() {
+            yellow!("fetch remote -> {} success!\n", REMOTE_NAME);
+        } else {
+            red!("fetch remote -> {} failed, \n{}", REMOTE_NAME, str::from_utf8(&fetch_result.stderr).unwrap());
+        }
+    }
+    let branchs = Command::new("git").args(["branch",  "-r"]).output().unwrap();
 
-    for branch in c {
+    // list origin branches
+    let restr = format!("{}/(.*)", REMOTE_NAME);
+    let target_remote_branch_re = Regex::new(&restr).unwrap();
+    // let target_remote_branchs = Vec::new();
+
+    let branch_vec  =  String::from_utf8_lossy(&branchs.stdout);
+    let branchs_vec: Vec<&str> = branch_vec.split("\n").collect();
+
+
+    for branch in branchs_vec {
         let branch_strip = branch_prefix_strip(branch);
-        all_branchs.push(branch_strip.clone());
+        if target_remote_branch_re.is_match(&branch_strip) {
+            let remote_branch_name = target_remote_branch_re.captures(&branch_strip).unwrap().get(1).unwrap().as_str().to_string();
+            all_branchs.push(remote_branch_name);
+        }
+        // all_branchs.push(branch_strip.clone());
         if nodeman_re.is_match(&branch_strip) {
             let numer_re = nodeman_re.captures(&branch_strip).unwrap();
             let version_numer: &str = numer_re.get(1).unwrap().as_str();
@@ -134,15 +164,33 @@ fn get_latest_issue() -> (String, Vec<String>) {
             re_branchs.push(branch_strip);
         }
     }
-    blue!("match branch list -> {:?}, then choice biggerst version!\n", re_branchs);
-    if re_branchs.is_empty() {
-        red!("no match branch\n");
+    if choice {
+        let choice_branch = choose_base_branch(&all_branchs);
+        (format!("{}/{}", REMOTE_NAME, choice_branch), all_branchs)
+    } else {
+        blue!("match branch list -> {:?}, then choice biggerst version!\n", re_branchs);
+        if re_branchs.is_empty() {
+            red!("no match branch\n");
+            std::process::exit(1);
+        }
+        let mut _latest_re_branch: String = String::new();
+        let mut _latest_re_branch_index: usize;
+        (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
+        (format!("{}/V{}-rc", REMOTE_NAME, _latest_re_branch), all_branchs)
+    }
+}
+
+fn choose_base_branch (branchs: &Vec<String>) -> String {
+    let branch_msg = format!("Which branch on remote -> [{}] do you want to choose for add new branch?", REMOTE_NAME);
+    let choice_branchs = branchs.clone();
+
+    if let Ok(choice) = Select::new(&branch_msg, choice_branchs).prompt() {
+        green!("You choose branch -> {}\n", choice);
+        choice.to_string()
+    } else {
+        red!("no choice branch\n");
         std::process::exit(1);
     }
-    let mut _latest_re_branch: String = String::new();
-    let mut _latest_re_branch_index: usize;
-    (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
-    (format!("V{}-rc", _latest_re_branch), all_branchs)
 }
 
 
@@ -191,14 +239,19 @@ fn main() {
                 }
                 let copy_issue = issue_msgs.clone();
                 if issue_msgs.len() != 0 {
-                    // let ans = Select::new("What's your issue want to?", issue_msgs).prompt();
-                    if let Ok(choice) = Select::new("What's your issue want to?", issue_msgs).prompt() {
+                    if let Ok(choice) = Select::new("Which issue do you want to choose??", issue_msgs).prompt() {
                         green!("Choice issue -> {}\n", &choice);
                         let index = copy_issue.iter().position(|&r| r == choice).unwrap();
+                        let choice_switch: bool;
                         let choice_issue_number = issue_numbers[index];
-                        let (latest_issue , all_branchs )= get_latest_issue();
+                        if args.chooise == "true" {
+                            choice_switch = true;
+                        } else {
+                            choice_switch = false;
+                        }
+                        let (latest_issue , all_branchs )= get_latest_issue(choice_switch);
 
-                        let new_branch = format!("test_issue#{}", choice_issue_number);
+                        let new_branch = format!("dev_issue#{}", choice_issue_number);
 
                         if all_branchs.contains(&&new_branch) {
                             red!("branch {} already exist, checkout!!!\n", new_branch);
@@ -207,7 +260,7 @@ fn main() {
                                 if code == Some(0) {
                                     green!("checkout to branch {}\n", &new_branch);
                                 } else {
-                                    red!("checkout branch filed! \n{}", str::from_utf8(&checkout_result.stdout).unwrap());
+                                    red!("checkout branch filed! \n{}", str::from_utf8(&checkout_result.stderr).unwrap());
                                     std::process::exit(1);
                                 }
                             }
@@ -220,9 +273,9 @@ fn main() {
                         {
                             let code = add_branch_result.status.code();
                             if code == Some(0) {
-                                green!("checkout branch by command -> git checkout -b {} {}, bash branch -> {}\n", new_branch, latest_issue, latest_issue);
+                                green!("checkout branch by command -> git checkout -b {} {}\n", new_branch, latest_issue);
                             } else {
-                                red!("checkout branch filed! \n{}", str::from_utf8(&add_branch_result.stdout).unwrap());
+                                red!("checkout branch to {} with base barnch -> {} filed! \n{}", new_branch, latest_issue, str::from_utf8(&add_branch_result.stderr).unwrap());
                                 std::process::exit(1);
                             }
                         }
