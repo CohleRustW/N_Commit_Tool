@@ -134,7 +134,7 @@ fn get_latest_issue(choice: bool) -> (String, Vec<String>) {
     let nodeman_re: Regex = Regex::new(r"V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc").unwrap();
     if let Ok(fetch_result) = Command::new("git").args(["fetch", REMOTE_NAME]).output() {
         if fetch_result.status.success() {
-            yellow/!("fetch remote -> {} success!\n", REMOTE_NAME);
+            yellow!("fetch remote -> {} success!\n", REMOTE_NAME);
         } else {
             red!("fetch remote -> {} failed, \n{}", REMOTE_NAME, str::from_utf8(&fetch_result.stderr).unwrap());
         }
@@ -181,9 +181,10 @@ fn get_latest_issue(choice: bool) -> (String, Vec<String>) {
 }
 
 fn choose_base_branch (branchs: &Vec<String>) -> String {
+    let branch_msg = format!("Which branch on remote -> [{}] do you want to choose for add new branch?", REMOTE_NAME);
     let choice_branchs = branchs.clone();
 
-    if let Ok(choice) = Select::new("Which branch do you want to choose for branch?", choice_branchs).prompt() {
+    if let Ok(choice) = Select::new(&branch_msg, choice_branchs).prompt() {
         green!("You choose branch -> {}\n", choice);
         choice.to_string()
     } else {
@@ -272,7 +273,7 @@ fn main() {
                         {
                             let code = add_branch_result.status.code();
                             if code == Some(0) {
-                                green!("checkout branch by command -> git checkout -b {} {}\n", new_branch, latest_issue, latest_issue);
+                                green!("checkout branch by command -> git checkout -b {} {}\n", new_branch, latest_issue);
                             } else {
                                 red!("checkout branch to {} with base barnch -> {} filed! \n{}", new_branch, latest_issue, str::from_utf8(&add_branch_result.stderr).unwrap());
                                 std::process::exit(1);
