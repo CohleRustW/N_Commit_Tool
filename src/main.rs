@@ -337,7 +337,6 @@ fn main() {
                                             "{}: {} ({} #{}){}",
                                             currect_tag, message, issue.number,  &yaml_config.commit_link_description, &yaml_config.commit_append_msg
                                         );
-
                                     } else {
                                         c = format!(
                                             "git commit -m \"{}: {} ({} #{})\"",
