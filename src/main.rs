@@ -382,7 +382,7 @@ fn main() {
                             }
                         }
                     } else {
-                        red!("branch number not in issue list\n");
+                        red!("branch number not in remote open issue list -> [{:#?}]\n", &b_n_vec);
                         std::process::exit(1);
                     }
                 } else {
