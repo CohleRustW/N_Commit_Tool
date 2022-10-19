@@ -9,10 +9,10 @@ use std::str;
 use inquire::{Text, validator::{StringValidator, Validation}};
 use inquire::{error::InquireError, Select};
 use version_compare::{Cmp, Version};
+
+mod config;
 #[macro_use]
 extern crate colour;
-
-static REMOTE_NAME: &'static str = "origin";
 
 #[derive(Parser, Debug)]
 #[clap(author, about, long_about = None)]
@@ -127,24 +127,26 @@ fn branch_prefix_strip(branch_name: &str) -> String {
 }
 
 #[warn(unused_assignments)]
-fn get_latest_issue(choice: bool) -> (String, Vec<String>) {
+fn get_latest_issue(choice: bool, version_re: &str, auto_fetch: bool,  remote_name: &str) -> (String, Vec<String>) {
     let mut re_branchs: Vec<String> = Vec::new();
     let mut all_branchs: Vec<String> = Vec::new();
     let mut branch_pure_number: Vec<String> = Vec::new();
-    let nodeman_re: Regex = Regex::new(r"V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc").unwrap();
-    if let Ok(fetch_result) = Command::new("git").args(["fetch", REMOTE_NAME]).output() {
-        if fetch_result.status.success() {
-            yellow!("fetch remote -> {} success!\n", REMOTE_NAME);
-        } else {
-            red!("fetch remote -> {} failed, \n{}", REMOTE_NAME, str::from_utf8(&fetch_result.stderr).unwrap());
+    let nodeman_re: Regex = Regex::new(version_re).unwrap();
+    if auto_fetch {
+        if let Ok(fetch_result) = Command::new("git").args(["fetch", remote_name]).output() {
+            if fetch_result.status.success() {
+                yellow!("fetch remote -> {} success!\n", remote_name);
+            } else {
+                red!("fetch remote -> {} failed, \n{}", remote_name, str::from_utf8(&fetch_result.stderr).unwrap());
+            }
         }
     }
+
     let branchs = Command::new("git").args(["branch",  "-r"]).output().unwrap();
 
     // list origin branches
-    let restr = format!("{}/(.*)", REMOTE_NAME);
+    let restr = format!("{}/(.*)", remote_name);
     let target_remote_branch_re = Regex::new(&restr).unwrap();
-    // let target_remote_branchs = Vec::new();
 
     let branch_vec  =  String::from_utf8_lossy(&branchs.stdout);
     let branchs_vec: Vec<&str> = branch_vec.split("\n").collect();
@@ -165,23 +167,23 @@ fn get_latest_issue(choice: bool) -> (String, Vec<String>) {
         }
     }
     if choice {
-        let choice_branch = choose_base_branch(&all_branchs);
-        (format!("{}/{}", REMOTE_NAME, choice_branch), all_branchs)
+        let choice_branch = choose_base_branch(&all_branchs, remote_name);
+        (format!("{}/{}", remote_name, choice_branch), all_branchs)
     } else {
         blue!("match branch list -> {:?}, then choice biggerst version!\n", re_branchs);
         if re_branchs.is_empty() {
-            red!("no match branch\n");
+            red!("no match branch by Regex: {}\n", version_re);
             std::process::exit(1);
         }
         let mut _latest_re_branch: String = String::new();
         let mut _latest_re_branch_index: usize;
         (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
-        (format!("{}/V{}-rc", REMOTE_NAME, _latest_re_branch), all_branchs)
+        (format!("{}/V{}-rc", remote_name, _latest_re_branch), all_branchs)
     }
 }
 
-fn choose_base_branch (branchs: &Vec<String>) -> String {
-    let branch_msg = format!("Which branch on remote -> [{}] do you want to choose for add new branch?", REMOTE_NAME);
+fn choose_base_branch (branchs: &Vec<String>, remote_name: &str) -> String {
+    let branch_msg = format!("Which branch on remote -> [{}] do you want to choose for add new branch?", remote_name);
     let choice_branchs = branchs.clone();
 
     if let Ok(choice) = Select::new(&branch_msg, choice_branchs).prompt() {
@@ -195,6 +197,16 @@ fn choose_base_branch (branchs: &Vec<String>) -> String {
 
 
 fn main() {
+    let yaml_config: config::Config;
+    match config::load_config() {
+        Ok(config) => {
+            yaml_config = config;
+        },
+        Err(e) => {
+            red!("parse config /etc/ncommit.yml failed: {}\n", e);
+            std::process::exit(1);
+        }
+    }
     let args = Args::parse();
     if args.web == "true" {
         if let Ok(result) = Command::new("gh").args(["issue", "list", "--web"]).output() {
@@ -229,7 +241,7 @@ fn main() {
                 let mut issue_msgs: Vec<&str> = Vec::new();
                 let mut issue_numbers: Vec<usize> = Vec::new();
                 for issue in load_json.iter() {
-                    let issue_pure_re: Regex = Regex::new(r"\[(.*)\](.*)").unwrap();
+                    let issue_pure_re: Regex = Regex::new(&yaml_config.issue_title_filter_re).unwrap();
                     if issue_pure_re.is_match(&issue.title) {
                         let issue_pure = issue_pure_re.captures(&issue.title).unwrap();
                         let pure_msg = issue_pure.get(2).unwrap().as_str();
@@ -249,9 +261,9 @@ fn main() {
                         } else {
                             choice_switch = false;
                         }
-                        let (latest_issue , all_branchs )= get_latest_issue(choice_switch);
+                        let (latest_issue , all_branchs )= get_latest_issue(choice_switch, &yaml_config.version_compare_re, yaml_config.enable_auto_fetch, &yaml_config.remote_name);
 
-                        let new_branch = format!("dev_issue#{}", choice_issue_number);
+                        let new_branch = format!("{}{}", &yaml_config.dev_issue_name_header, choice_issue_number);
 
                         if all_branchs.contains(&&new_branch) {
                             red!("branch {} already exist, checkout!!!\n", new_branch);
@@ -288,7 +300,7 @@ fn main() {
 
             if let Ok(result) = get_branch() {
                 let branch = String::from_utf8_lossy(&result);
-                let issue_re: Regex = Regex::new(r".*issue#?(\d+).*").unwrap();
+                let issue_re: Regex = Regex::new(&yaml_config.dev_issue_re).unwrap();
                 if issue_re.is_match(&branch) {
                     let re_result = issue_re.captures(&branch).unwrap();
                     let branch_number = &re_result[1];
@@ -300,7 +312,7 @@ fn main() {
                         for issue in load_json.iter() {
                             if issue.number == usize_branch {
                                 let title = &issue.title;
-                                let title_re: Regex = Regex::new(r"\[(.*)\] (.*)").unwrap();
+                                let title_re: Regex = Regex::new(&yaml_config.issue_title_filter_re).unwrap();
                                 if title_re.is_match(title) {
                                     let title_result = title_re.captures(&title).unwrap();
                                     let tag = &title_result[1];
@@ -313,14 +325,30 @@ fn main() {
                                     }
 
                                     let currect_tag = lower_and_bug_head_replace(tag);
-                                    let c = format!(
-                                        "git commit -m \"{}: {} (closed #{})(wf -l)\"",
-                                        currect_tag, message, issue.number
-                                    );
-                                    let d = format!(
-                                        "{}: {} (closed #{})(wf -l)",
-                                        currect_tag, message, issue.number
-                                    );
+                                    let mut c: String= String::new();
+                                    let mut d: String= String::new();
+
+                                    if yaml_config.commit_append_nodeman_msg {
+                                        c = format!(
+                                            "git commit -m \"{}: {} ({} #{}){}\"",
+                                            currect_tag, message, issue.number, &yaml_config.commit_link_description, &yaml_config.commit_append_msg
+                                        );
+                                        d = format!(
+                                            "{}: {} ({} #{}){}",
+                                            currect_tag, message, issue.number,  &yaml_config.commit_link_description, &yaml_config.commit_append_msg
+                                        );
+
+                                    } else {
+                                        c = format!(
+                                            "git commit -m \"{}: {} ({} #{})\"",
+                                            currect_tag, message, &yaml_config.commit_link_description, issue.number
+                                        );
+                                        d = format!(
+                                            "{}: {} ({} #{})",
+                                            currect_tag, message, &yaml_config.commit_link_description, issue.number
+                                        );
+                                    }
+
                                     if args.print == "true" {
                                         println!("{}", c);
                                         std::process::exit(1);
@@ -355,13 +383,13 @@ fn main() {
                             }
                         }
                     } else {
-                        red!("branch number not in issue list");
+                        red!("branch number not in issue list\n");
                         std::process::exit(1);
                     }
                 } else {
                     red!(
-                        "branch -> {:?} 不符合匹配规则 like: (*issue#666*|*issue666*)\n",
-                        branch
+                        "branch -> {:?} 不符合匹配规则: {}\n",
+                        branch, &yaml_config.dev_issue_re
                     );
                     std::process::exit(1);
                 }
