@@ -17,7 +17,7 @@
 //     Ok(())
 // }
 use regex::Regex;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Point {

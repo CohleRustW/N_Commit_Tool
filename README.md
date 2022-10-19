@@ -18,7 +18,7 @@
 ```bash
  ---
 # git remote name on working directory
- remote_name: Tencent
+ remote_name: origin
 
 # 通过本地分支名称提取对应的 Issue ID, 用于关联 Issue, 例如 test_issue#1111, 支持正则表达式
  dev_issue_re: .*issue#?(\d+).*

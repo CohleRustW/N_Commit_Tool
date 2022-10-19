@@ -1,7 +1,7 @@
-use serde::{Serialize, Deserialize};
 use anyhow::Result;
-use std::fs;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::fs;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -16,8 +16,7 @@ pub struct Config {
     pub commit_link_description: String,
 }
 
-
-pub fn load_config () -> Result<Config, Box<dyn Error>>{
+pub fn load_config() -> Result<Config, Box<dyn Error>> {
     let yaml_text = fs::read_to_string("/etc/ncommit.yml")?;
 
     let config: Config = match serde_yaml::from_str(&yaml_text) {
