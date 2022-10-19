@@ -1,5 +1,8 @@
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use std::fs;
+use std::error::Error;
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub remote_name: String,
@@ -14,13 +17,14 @@ pub struct Config {
 }
 
 
-pub fn load_config () -> Result<Config, ()>{
-    let yaml_text = include_str!("nconfig.yml");
+pub fn load_config () -> Result<Config, Box<dyn Error>>{
+    let yaml_text = fs::read_to_string("/etc/ncommit.yml")?;
+
     let config: Config = match serde_yaml::from_str(&yaml_text) {
         Ok(c) => c,
         Err(e) => {
             red!("parse config nconfig.yml failed: {}\n", e);
-            return Err(());
+            std::process::exit(1);
         }
     };
     Ok(config)

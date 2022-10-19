@@ -198,10 +198,14 @@ fn choose_base_branch (branchs: &Vec<String>, remote_name: &str) -> String {
 
 fn main() {
     let yaml_config: config::Config;
-    if let Ok(config) = config::load_config() {
-        yaml_config = config;
-    } else {
-        std::process::exit(1);
+    match config::load_config() {
+        Ok(config) => {
+            yaml_config = config;
+        },
+        Err(e) => {
+            red!("parse config /etc/ncommit.yml failed: {}\n", e);
+            std::process::exit(1);
+        }
     }
     let args = Args::parse();
     if args.web == "true" {
@@ -327,13 +331,12 @@ fn main() {
                                     if yaml_config.commit_append_nodeman_msg {
                                         c = format!(
                                             "git commit -m \"{}: {} ({} #{}){}\"",
-                                            currect_tag, message, issue.number, &yaml_config.commit_link_description, &yaml_config.commit_append_nodeman_msg
+                                            currect_tag, message, issue.number, &yaml_config.commit_link_description, &yaml_config.commit_append_msg
                                         );
                                         d = format!(
                                             "{}: {} ({} #{}){}",
-                                            currect_tag, message, issue.number,  &yaml_config.commit_link_description, &yaml_config.commit_append_nodeman_msg
+                                            currect_tag, message, issue.number,  &yaml_config.commit_link_description, &yaml_config.commit_append_msg
                                         );
-
                                     } else {
                                         c = format!(
                                             "git commit -m \"{}: {} ({} #{})\"",
@@ -379,7 +382,7 @@ fn main() {
                             }
                         }
                     } else {
-                        red!("branch number not in issue list");
+                        red!("branch number not in issue list\n");
                         std::process::exit(1);
                     }
                 } else {
