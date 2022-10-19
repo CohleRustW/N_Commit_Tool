@@ -1,0 +1,18 @@
+ ---
+ remote_name: Tencent
+
+ dev_issue_re: .*issue#?(\d+).*
+
+ enable_auto_fetch: true
+
+ version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+
+ issue_title_filter_re: \[(.*)\](.*)
+
+ dev_issue_name_header: dev_issue#
+
+ commit_append_nodeman_msg: true
+
+ commit_append_msg: (wf -l)
+
+ commit_link_description: closed

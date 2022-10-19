@@ -1,0 +1,27 @@
+ ---
+# git remote name on working directory
+ remote_name: Tencent
+
+# 通过本地分支名称提取对应的 Issue ID, 用于关联 Issue, 例如 test_issue#1111, 支持正则表达式
+ dev_issue_re: .*issue#?(\d+).*
+
+# 是否开启自动 fetch 远程分支
+ enable_auto_fetch: true
+
+# 版本比较正则，用于提取符合正则规则的最大版本号来创建 dev branch
+ version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+
+# Issue title 正则, 用于匹配 Issue title, Like: [BUG] xxxxx
+ issue_title_filter_re: \[(.*)\](.*)
+
+# 本地分支名创建规则，自动追加 Issue ID在分支名称后面
+ dev_issue_name_header: dev_issue#
+
+# 是否启动节点管理 commit message append, 默认关闭
+ commit_append_nodeman_msg: false
+
+# 节点管理 commit message append 规则
+ commit_append_msg: (wf -l)
+
+# github work flow link commit description Like：fixed close closed
+ commit_link_description: closed
