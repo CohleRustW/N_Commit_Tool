@@ -1,0 +1,6 @@
+---
+remote_name: Tencent
+
+dev_issue_re: .*issue#?(\d+).*
+
+enable_auto_fetch: true
