@@ -1,5 +1,6 @@
 ### N Commit Tool
 > 本工具用于 GitHub 开源仓库开发者，开发过程中交互式选择并创建本地开发分支，并通过对应 Issue ID 的描述信息完成 commit message 拼接
+> 如果你的开发工作流不是以` github issue`进行管理，那该工具不适合你
 
 #### 工具目录
 > mac os 已编译测试版本二进制到目录 examples/ncommit
