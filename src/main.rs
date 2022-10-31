@@ -385,24 +385,24 @@ fn main() {
                                             "git commit -m \"{}: {} ({} #{}){}\"",
                                             currect_tag,
                                             message,
-                                            issue.number,
                                             &yaml_config.commit_link_description,
+                                            issue.number,
                                             &yaml_config.commit_append_msg
                                         );
                                         d = format!(
                                             "{}: {} ({} #{}){}",
                                             currect_tag,
                                             message,
-                                            issue.number,
                                             &yaml_config.commit_link_description,
+                                            issue.number,
                                             &yaml_config.commit_append_msg
                                         );
                                     } else {
                                         c = format!(
                                             "git commit -m \"{}: {} ({} #{})\"",
                                             currect_tag,
-                                            message,
                                             &yaml_config.commit_link_description,
+                                            message,
                                             issue.number
                                         );
                                         d = format!(
