@@ -280,7 +280,7 @@ fn main() {
                 let copy_issue = issue_msgs.clone();
                 if issue_msgs.len() != 0 {
                     if let Ok(choice) =
-                        Select::new("Which issue do you want to choose??", issue_msgs).prompt()
+                        Select::new("Which issue do you want to choose?", issue_msgs).prompt()
                     {
                         green!("Choice issue -> {}\n", &choice);
                         let index = copy_issue.iter().position(|&r| r == choice).unwrap();
