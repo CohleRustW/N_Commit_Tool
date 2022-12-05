@@ -223,6 +223,25 @@ fn choose_base_branch(branchs: &Vec<String>, remote_name: &str) -> String {
     }
 }
 
+fn checkout_branch(target_branch: String) {
+    let checkout_result = Command::new("git")
+        .args(["checkout", &target_branch])
+        .output()
+        .unwrap();
+    if checkout_result.status.success() {
+        green!("checkout branch -> {} success!\n", target_branch);
+    } else {
+        red!(
+            "checkout branch -> {} failed, \r
+
+{}",
+            target_branch,
+            str::from_utf8(&checkout_result.stderr).unwrap()
+        );
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let yaml_config: config::Config;
     match config::load_config() {
@@ -334,6 +353,42 @@ fn main() {
                                     latest_issue
                                 );
                             } else {
+                                let checkout_result =
+                                    str::from_utf8(&add_branch_result.stderr).unwrap();
+                                let branch_exists_re =
+                                    Regex::new(r"fatal: A branch named '.*' already exists.")
+                                        .unwrap();
+                                if branch_exists_re.is_match(checkout_result) {
+                                    let match_stdin = vec![
+                                        "y".to_string(),
+                                        "yes".to_string(),
+                                        "Y".to_string(),
+                                        "yes".to_string(),
+                                        "Yes".to_string(),
+                                    ];
+                                    let checkout_msg = format!("branch {} already exist, checkout? (y/n)", new_branch);
+                                    let stdin_result =
+                                        Text::new(&checkout_msg).prompt();
+                                    match stdin_result {
+                                        Ok(stdin) => {
+                                            if match_stdin.contains(&stdin) {
+                                                red!(
+                                                    "You press yes. So checkout branch -> {}\n",
+                                                    new_branch.clone()
+                                                );
+                                                checkout_branch(new_branch.clone());
+                                            } else {
+                                                red!("You press no. So exit!!!\n");
+                                                std::process::exit(0);
+                                            }
+
+                                        }
+                                        Err(e) => {
+                                            red!("input error -> {}\n", e);
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
                                 red!(
                                     "checkout branch to {} with base barnch -> {} filed! \n{}",
                                     new_branch,
