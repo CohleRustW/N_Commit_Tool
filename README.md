@@ -27,7 +27,7 @@
  enable_auto_fetch: true
 
 # 版本比较正则，用于提取符合正则规则的最大版本号来创建 dev branch
- version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+ version_compare_re: v(\d{1,2}\.\d{1,2}\.\d{1,2})-dev
 
 # Issue title 正则, 用于匹配 Issue title, Like: [BUG] xxxxx
  issue_title_filter_re: \[(.*)\](.*)
