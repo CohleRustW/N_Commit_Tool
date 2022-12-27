@@ -12,6 +12,12 @@
 
 2. 方式2：放置工具在路径 `/usr/local/bin`目录下
 
+3. 你可以自行编译
+- 安装 `rust`，`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- 同步仓库到本地: `git clone`
+- 编译: `cargo build --release` 就能在 `target/release` 目录中拿到对应二进制
+- `windows` 编译参数: `cargo build --release --target x86_64-pc-windows-gnu`
+
 #### 依赖步骤
 1. 依赖开源工具 gh, 需要提前安装并且完成鉴权
 2. 新增配置文件`ncommit.yml`到 `/etc/`目录下，根据项目需求自行配置
