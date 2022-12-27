@@ -44,6 +44,9 @@
 # github work flow link commit description Like：fixed close closed
  commit_link_description: closed
 
+ # 在拉取远程分支选出最新版本号后，用于拼接远程分支名称模板， {{ number }} 为版本号关键词, 目的是解决远程分支规则的变更
+remote_branch_name_template: v{{ number }}-dev
+
  ```
 
 ##### 安装步骤

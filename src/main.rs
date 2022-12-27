@@ -1,17 +1,14 @@
 use clap::Parser;
-use core::num;
-use inquire::{error::InquireError, Select};
-use inquire::{
-    validator::{StringValidator, Validation},
-    Text,
-};
+use handlebars::Handlebars;
+use inquire::Select;
+use inquire::Text;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::{Result, Value};
+use serde_json::json;
+use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
-use std::{process::Command, sync::Arc};
-use version_compare::{Cmp, Version};
+use version_compare::Version;
 
 mod config;
 #[macro_use]
@@ -112,6 +109,18 @@ fn is_element_in_vec(a: &usize, v: &Vec<usize>) -> bool {
     result
 }
 
+fn render_branch_name_by_tmp(branch_number: &str, tmp: &str) -> String {
+    let mut reg = Handlebars::new();
+    reg.register_template_string("branch_name", &tmp).unwrap();
+    match reg.render("branch_name", &json!({ "number": branch_number })) {
+        Ok(rendered) => rendered,
+        Err(e) => {
+            red!("render branch name failed: {}\n", e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn lower_and_bug_head_replace(source: &str) -> String {
     let lower_source = source.to_lowercase();
     let bug_re: Regex = Regex::new(r"bug$").unwrap();
@@ -137,6 +146,7 @@ fn get_latest_issue(
     version_re: &str,
     auto_fetch: bool,
     remote_name: &str,
+    new_branch_base_format: &str,
 ) -> (String, Vec<String>) {
     let mut re_branchs: Vec<String> = Vec::new();
     let mut all_branchs: Vec<String> = Vec::new();
@@ -200,8 +210,12 @@ fn get_latest_issue(
         let mut _latest_re_branch: String = String::new();
         let mut _latest_re_branch_index: usize;
         (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
+        let target_latest_branch_name = render_branch_name_by_tmp(
+            &_latest_re_branch,
+            &new_branch_base_format.to_string(),
+        );
         (
-            format!("{}/V{}-rc", remote_name, _latest_re_branch),
+            format!("{}/{}", remote_name, target_latest_branch_name),
             all_branchs,
         )
     }
@@ -219,6 +233,26 @@ fn choose_base_branch(branchs: &Vec<String>, remote_name: &str) -> String {
         choice.to_string()
     } else {
         red!("no choice branch\n");
+        std::process::exit(1);
+    }
+}
+
+fn checkout_branch(target_branch: String) {
+    let checkout_result = Command::new("git")
+        .args(["checkout", &target_branch])
+        .output()
+        .unwrap();
+    if checkout_result.status.success() {
+        green!("checkout branch -> {} success!\n", target_branch);
+        std::process::exit(0);
+    } else {
+        red!(
+            "checkout branch -> {} failed, \r
+
+{}",
+            target_branch,
+            str::from_utf8(&checkout_result.stderr).unwrap()
+        );
         std::process::exit(1);
     }
 }
@@ -296,6 +330,7 @@ fn main() {
                             &yaml_config.version_compare_re,
                             yaml_config.enable_auto_fetch,
                             &yaml_config.remote_name,
+                            &yaml_config.remote_branch_name_template
                         );
 
                         let new_branch = format!(
@@ -334,6 +369,43 @@ fn main() {
                                     latest_issue
                                 );
                             } else {
+                                let checkout_result =
+                                    str::from_utf8(&add_branch_result.stderr).unwrap();
+                                let branch_exists_re =
+                                    Regex::new(r"fatal: A branch named '.*' already exists.")
+                                        .unwrap();
+                                if branch_exists_re.is_match(checkout_result) {
+                                    let match_stdin = vec![
+                                        "y".to_string(),
+                                        "yes".to_string(),
+                                        "Y".to_string(),
+                                        "yes".to_string(),
+                                        "Yes".to_string(),
+                                    ];
+                                    let checkout_msg = format!(
+                                        "branch {} already exist, checkout? (y/n)",
+                                        new_branch
+                                    );
+                                    let stdin_result = Text::new(&checkout_msg).prompt();
+                                    match stdin_result {
+                                        Ok(stdin) => {
+                                            if match_stdin.contains(&stdin) {
+                                                red!(
+                                                    "You press yes. So checkout branch -> {}\n",
+                                                    new_branch.clone()
+                                                );
+                                                checkout_branch(new_branch.clone());
+                                            } else {
+                                                red!("You press no. So exit!!!\n");
+                                                std::process::exit(0);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            red!("input error -> {}\n", e);
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
                                 red!(
                                     "checkout branch to {} with base barnch -> {} filed! \n{}",
                                     new_branch,
@@ -470,5 +542,17 @@ fn main() {
         }
     } else {
         red!("gh command failed!")
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn render_shoud_work() {
+        let temp = "v{{ number }}-dev";
+        let version = "1.0.0";
+        assert_eq!(render_branch_name_by_tmp(version, temp), "v1.0.0-dev".to_string())
     }
 }
