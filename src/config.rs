@@ -17,6 +17,22 @@ pub struct Config {
     pub remote_branch_name_template: String,
 }
 
+#[cfg(target_os = "windows")]
+pub fn load_config() -> Result<Config, Box<dyn Error>> {
+    let yaml_text = fs::read_to_string("C:\\ncommit.yml")?;
+
+    let config: Config = match serde_yaml::from_str(&yaml_text) {
+        Ok(c) => c,
+        Err(e) => {
+            red!("parse config nconfig.yml failed: {}\n", e);
+            std::process::exit(1);
+        }
+    };
+    Ok(config)
+}
+
+
+#[cfg(not(target_os = "windows"))]
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
     let yaml_text = fs::read_to_string("/etc/ncommit.yml")?;
 
