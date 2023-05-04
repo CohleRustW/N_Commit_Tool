@@ -15,6 +15,7 @@ pub struct Config {
     pub commit_append_msg: String,
     pub commit_link_description: String,
     pub remote_branch_name_template: String,
+    pub commit_custom_params: String,
 }
 
 #[cfg(target_os = "windows")]

@@ -81,6 +81,30 @@ fn get_branch() -> CResult<Vec<u8>, Box<std::io::Error>> {
     Ok(branch.stdout)
 }
 
+fn custom_commit_params(custom_args: &str) -> String {
+    let base_params = String::from("-m");
+    let mut is_add_custom_args: bool = true;
+    if !custom_args.starts_with("-") {
+        is_add_custom_args = false;
+    }
+    if custom_args.len() == 0 {
+        is_add_custom_args = false;
+    }
+
+    if is_add_custom_args {
+        // if to_vec {
+        //     let mut result = vec![base_params];
+        //     for c in custom_args.split_whitespace() {
+        //         result.push(c.to_string());
+        //     }
+        //     return result
+        // }
+        return format!("{} {}", base_params, custom_args)
+    } else {
+        return base_params
+    }
+}
+
 fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
     let mut version_numer: String = String::new();
     let numer_version_list = version_list.clone();
@@ -372,7 +396,7 @@ fn main() {
                                 let checkout_result =
                                     str::from_utf8(&add_branch_result.stderr).unwrap();
                                 let branch_exists_re =
-                                    Regex::new(r"fatal: A branch named '.*' already exists.")
+                                    Regex::new(r".*already exists.*")
                                         .unwrap();
                                 if branch_exists_re.is_match(checkout_result) {
                                     let match_stdin = vec![
@@ -454,7 +478,8 @@ fn main() {
 
                                     if yaml_config.commit_append_nodeman_msg {
                                         c = format!(
-                                            "git commit -m \"{}: {} ({} #{}){}\"",
+                                            "git commit {} \"{}: {} ({} #{}){}\"",
+                                            custom_commit_params(&yaml_config.commit_custom_params),
                                             currect_tag,
                                             message,
                                             issue.number,
@@ -471,7 +496,8 @@ fn main() {
                                         );
                                     } else {
                                         c = format!(
-                                            "git commit -m \"{}: {} ({} #{})\"",
+                                            "git commit {} \"{}: {} ({} #{})\"",
+                                            custom_commit_params(&yaml_config.commit_custom_params),
                                             currect_tag,
                                             message,
                                             &yaml_config.commit_link_description,
@@ -490,8 +516,20 @@ fn main() {
                                         println!("{}", c);
                                         std::process::exit(1);
                                     }
+                                    let mut commit_params = vec!["commit"];
+                                    // 把 custom_commit_parmas 里面的参数拆分成列表
+                                    let custom_commit_string = custom_commit_params(&yaml_config.commit_custom_params);
+                                    let custom_commit_params : Vec<&str>= custom_commit_string
+                                        .split(" ")
+                                        .collect::<Vec<&str>>();
+                                    // 把 custom_commit_parmas 里面的参数追加进 commit_params
+                                    for custom_commit_param in custom_commit_params {
+                                        commit_params.push(&custom_commit_param);
+                                    }
+                                    commit_params.push(&d);
+
                                     if let Ok(result) =
-                                        Command::new("git").args(["commit", "-m", &d]).output()
+                                        Command::new("git").args(commit_params).output()
                                     {
                                         match result.status.code() {
                                             Some(code) => {

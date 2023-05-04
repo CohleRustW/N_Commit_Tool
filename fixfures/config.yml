@@ -1,4 +1,4 @@
- ---
+--- 
  remote_name: Tencent
 
  dev_issue_re: .*issue#?(\d+).*
@@ -16,3 +16,5 @@
  commit_append_msg: (wf -l)
 
  commit_link_description: closed
+
+ commit_custom_params: 

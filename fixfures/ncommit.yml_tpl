@@ -25,3 +25,6 @@
 
 # github work flow link commit description Like：fixed close closed
  commit_link_description: closed
+
+# git commit message with custom parameters
+ commit_custom_params: 
