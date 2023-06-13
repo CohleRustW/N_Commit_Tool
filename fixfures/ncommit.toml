@@ -1,0 +1,25 @@
+['/Users/xcwang/code/gsekit']
+remote_name= "Tencent"
+dev_issue_re='''.*issue#?(\d+).*'''
+enable_auto_fetch= true
+version_compare_re='''v(\d{1,2}\.\d{1,2}\.\d{1,2})-rc'''
+dev_issue_name_header= "_V1.0.X/dev_issue#"
+remote_branch_name_template= "v{{ number }}-rc"
+issue_title_filter_re='''\[(.*)\](.*)'''
+commit_append_nodeman_msg= false
+commit_append_msg= "(wf -l)"
+commit_link_description='closed'
+commit_custom_params= ""
+
+['/Users/xcwang/code/nodeman']
+remote_name= "Tencent"
+dev_issue_re= '''.*issue#?(\d+).*'''
+enable_auto_fetch= true
+version_compare_re='''v(\d{1,2}\.\d{1,2}\.\d{1,2})-dev'''
+dev_issue_name_header= "_V2.3.X/dev_issue#"
+remote_branch_name_template="v{{ number }}-dev"
+issue_title_filter_re='''\[(.*)\](.*)'''
+commit_append_nodeman_msg= false
+commit_append_msg= "(wf -l)"
+commit_link_description='closed'
+commit_custom_params= ""
