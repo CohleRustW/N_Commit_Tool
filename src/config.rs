@@ -22,18 +22,39 @@ pub struct Config {
 
 #[cfg(target_os = "windows")]
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
-    let yaml_text = fs::read_to_string("C:\\ncommit.toml")?;
+    let toml_text: String = fs::read_to_string("C:\\etc\\ncommit.toml")?;
 
-    let config: Config = match toml::from_str(&yaml_text) {
-        Ok(c) => c,
+    let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
+        Ok(config_map) => config_map,
         Err(e) => {
-            red!("parse config nconfig.yml failed: {}\n", e);
+            red!("parse config nconfig.toml failed: {}\n", e);
             std::process::exit(1);
         }
     };
-    Ok(config)
-}
+    let mut result_config: Option<&Config> = None;
+    for (project_path, project_config) in config_map.iter() {
+        let current_path: String = get_current_path()?;
+        if project_path.to_string() == current_path.to_string() {
+            result_config = Some(project_config);
+        } else {
+            result_config = None;
+        };
+    }
+    if mem::size_of::<Config>() == 0 {
+        red!("no match project path config found in nconfig.toml\n");
+        std::process::exit(1);
+    }
+    match result_config {
+        Some(config) => {
+        },
+        None => {
+            red!("no match project path config found in nconfig.toml, current project {}\n", get_current_path()?);
+            std::process::exit(1);
+        }
+    }
 
+    Ok(result_config.unwrap().clone())
+}
 
 #[cfg(not(target_os = "windows"))]
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
