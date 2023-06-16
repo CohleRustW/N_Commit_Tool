@@ -1,9 +1,11 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::fs;
+use std::{fs, str};
 use std::collections::HashMap;
 use std::mem;
+use std::process::Command;
+use regex::Regex;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -27,7 +29,7 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
     let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
         Ok(config_map) => config_map,
         Err(e) => {
-            red!("parse config nconfig.toml failed: {}\n", e);
+            red!("parse config ncommit.toml failed: {}\n", e);
             std::process::exit(1);
         }
     };
@@ -41,7 +43,7 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
         };
     }
     if mem::size_of::<Config>() == 0 {
-        red!("no match project path config found in nconfig.toml\n");
+        red!("no match project path config found in ncommit.toml\n");
         std::process::exit(1);
     }
     match result_config {
@@ -63,28 +65,32 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
     let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
         Ok(config_map) => config_map,
         Err(e) => {
-            red!("parse config nconfig.toml failed: {}\n", e);
+            red!("parse config ncommit.toml failed: {}\n", e);
             std::process::exit(1);
         }
     };
     let mut result_config: Option<&Config> = None;
+    let mut project_paths: Vec<String> = Vec::new();
     for (project_path, project_config) in config_map.iter() {
+        project_paths.push(project_path.to_string());
         let current_path: String = get_current_path()?;
-        if project_path.to_string() == current_path.to_string() {
+        let re_str = format!(".*{}.*",project_path.to_string());
+        let project_path_re: Regex = Regex::new(&re_str).unwrap();
+        if project_path_re.is_match(&current_path) {
             result_config = Some(project_config);
         } else {
             result_config = None;
         };
     }
     if mem::size_of::<Config>() == 0 {
-        red!("no match project path config found in nconfig.toml\n");
+        red!("no match project path config found in ncommit.toml\n");
         std::process::exit(1);
     }
     match result_config {
         Some(config) => {
         },
         None => {
-            red!("no match project path config found in nconfig.toml, current project {}\n", get_current_path()?);
+            red!("no match project path config found in ncommit.toml, current project {}\n, projects -> {:#?}\n", get_current_path()?, project_paths);
             std::process::exit(1);
         }
     }
@@ -94,7 +100,13 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
 
 
 pub fn get_current_path() -> Result<String, Box<dyn Error>> {
-    let current_path = std::env::current_dir()?;
-    let current_path = current_path.to_str().unwrap();
-    Ok(current_path.to_string())
+    let output = Command::new("git")
+        .args(&["rev-parse", "--show-toplevel"])
+        .output()
+        .expect("failed to execute git");
+    if !output.status.success() {
+        red!("git rev-parse --show-toplevel failed\n");
+        std::process::exit(1);
+    }
+    Ok(str::from_utf8(&output.stdout).unwrap().trim().to_string())
 }
