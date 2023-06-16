@@ -1,11 +1,11 @@
 use anyhow::Result;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::{fs, str};
 use std::collections::HashMap;
+use std::error::Error;
 use std::mem;
 use std::process::Command;
-use regex::Regex;
+use std::{fs, str};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -47,10 +47,12 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
         std::process::exit(1);
     }
     match result_config {
-        Some(config) => {
-        },
+        Some(config) => {}
         None => {
-            red!("no match project path config found in nconfig.toml, current project {}\n", get_current_path()?);
+            red!(
+                "no match project path config found in nconfig.toml, current project {}\n",
+                get_current_path()?
+            );
             std::process::exit(1);
         }
     }
@@ -74,7 +76,7 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
     for (project_path, project_config) in config_map.iter() {
         project_paths.push(project_path.to_string());
         let current_path: String = get_current_path()?;
-        let re_str = format!(".*{}.*",project_path.to_string());
+        let re_str = format!(".*{}.*", project_path.to_string());
         let project_path_re: Regex = Regex::new(&re_str).unwrap();
         if project_path_re.is_match(&current_path) {
             result_config = Some(project_config);
@@ -82,13 +84,8 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
             result_config = None;
         };
     }
-    if mem::size_of::<Config>() == 0 {
-        red!("no match project path config found in ncommit.toml\n");
-        std::process::exit(1);
-    }
     match result_config {
-        Some(config) => {
-        },
+        Some(config) => {}
         None => {
             red!("no match project path config found in ncommit.toml, current project {}\n, projects -> {:#?}\n", get_current_path()?, project_paths);
             std::process::exit(1);
@@ -97,7 +94,6 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
 
     Ok(result_config.unwrap().clone())
 }
-
 
 pub fn get_current_path() -> Result<String, Box<dyn Error>> {
     let output = Command::new("git")

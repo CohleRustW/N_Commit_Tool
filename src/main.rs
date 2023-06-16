@@ -99,9 +99,9 @@ fn custom_commit_params(custom_args: &str) -> String {
         //     }
         //     return result
         // }
-        return format!("{} {}", base_params, custom_args)
+        return format!("{} {}", base_params, custom_args);
     } else {
-        return base_params
+        return base_params;
     }
 }
 
@@ -234,10 +234,8 @@ fn get_latest_issue(
         let mut _latest_re_branch: String = String::new();
         let mut _latest_re_branch_index: usize;
         (_latest_re_branch, _latest_re_branch_index) = biggerst_version_number(branch_pure_number);
-        let target_latest_branch_name = render_branch_name_by_tmp(
-            &_latest_re_branch,
-            &new_branch_base_format.to_string(),
-        );
+        let target_latest_branch_name =
+            render_branch_name_by_tmp(&_latest_re_branch, &new_branch_base_format.to_string());
         (
             format!("{}/{}", remote_name, target_latest_branch_name),
             all_branchs,
@@ -354,7 +352,7 @@ fn main() {
                             &yaml_config.version_compare_re,
                             yaml_config.enable_auto_fetch,
                             &yaml_config.remote_name,
-                            &yaml_config.remote_branch_name_template
+                            &yaml_config.remote_branch_name_template,
                         );
 
                         let new_branch = format!(
@@ -395,9 +393,7 @@ fn main() {
                             } else {
                                 let checkout_result =
                                     str::from_utf8(&add_branch_result.stderr).unwrap();
-                                let branch_exists_re =
-                                    Regex::new(r".*already exists.*")
-                                        .unwrap();
+                                let branch_exists_re = Regex::new(r".*already exists.*").unwrap();
                                 if branch_exists_re.is_match(checkout_result) {
                                     let match_stdin = vec![
                                         "y".to_string(),
@@ -518,10 +514,10 @@ fn main() {
                                     }
                                     let mut commit_params = vec!["commit"];
                                     // 把 custom_commit_parmas 里面的参数拆分成列表
-                                    let custom_commit_string = custom_commit_params(&yaml_config.commit_custom_params);
-                                    let custom_commit_params : Vec<&str>= custom_commit_string
-                                        .split(" ")
-                                        .collect::<Vec<&str>>();
+                                    let custom_commit_string =
+                                        custom_commit_params(&yaml_config.commit_custom_params);
+                                    let custom_commit_params: Vec<&str> =
+                                        custom_commit_string.split(" ").collect::<Vec<&str>>();
                                     // 把 custom_commit_parmas 里面的参数追加进 commit_params
                                     for custom_commit_param in custom_commit_params {
                                         commit_params.push(&custom_commit_param);
@@ -583,7 +579,6 @@ fn main() {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -591,6 +586,9 @@ mod tests {
     fn render_shoud_work() {
         let temp = "v{{ number }}-dev";
         let version = "1.0.0";
-        assert_eq!(render_branch_name_by_tmp(version, temp), "v1.0.0-dev".to_string())
+        assert_eq!(
+            render_branch_name_by_tmp(version, temp),
+            "v1.0.0-dev".to_string()
+        )
     }
 }
