@@ -99,7 +99,7 @@ fn custom_commit_params(custom_args: &str) -> String {
         //     }
         //     return result
         // }
-        return format!("{} {}", base_params, custom_args);
+        return format!("{} {}", custom_args, base_params);
     } else {
         return base_params;
     }

@@ -1,11 +1,11 @@
 use anyhow::Result;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::mem;
 use std::process::Command;
 use std::{fs, str};
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -76,13 +76,15 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
     for (project_path, project_config) in config_map.iter() {
         project_paths.push(project_path.to_string());
         let current_path: String = get_current_path()?;
-        let re_str = format!(".*{}.*", project_path.to_string());
-        let project_path_re: Regex = Regex::new(&re_str).unwrap();
-        if project_path_re.is_match(&current_path) {
+        let project_path: PathBuf = PathBuf::from(project_path.to_string());
+        let current_path_buf: PathBuf = PathBuf::from(current_path.to_string());
+        if current_path_buf == project_path {
             result_config = Some(project_config);
+            break;
         } else {
             result_config = None;
         };
+
     }
     match result_config {
         Some(config) => {}
