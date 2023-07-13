@@ -1,20 +1,39 @@
---- 
- remote_name: Tencent
+project_config:
+  - project_dir: test
+    remote_name: Tencent
+    dev_issue_re: .*issue#?(\d+).*
+    enable_auto_fetch: true
+    version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+    issue_title_filter_re: \[(.*)\](.*)
 
- dev_issue_re: .*issue#?(\d+).*
+    dev_issue_name_header: dev_issue#
 
- enable_auto_fetch: true
+    commit_append_nodeman_msg: true
 
- version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+    commit_append_msg: (wf -l)
 
- issue_title_filter_re: \[(.*)\](.*)
+    commit_link_description: closed
 
- dev_issue_name_header: dev_issue#
+    commit_custom_params:
 
- commit_append_nodeman_msg: true
+  - project_dir: test1
+    remote_name: Tencent
 
- commit_append_msg: (wf -l)
+    dev_issue_re: .*issue#?(\d+).*
 
- commit_link_description: closed
+    enable_auto_fetch: true
 
- commit_custom_params: 
+    version_compare_re: V(\d{1,2}\.\d{1,2}\.\d{1,2})-rc
+
+    issue_title_filter_re: \[(.*)\](.*)
+
+    dev_issue_name_header: dev_issue#
+
+    commit_append_nodeman_msg: true
+
+    commit_append_msg: (wf -l)
+
+    commit_link_description: closed
+
+    commit_custom_params:
+  

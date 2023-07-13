@@ -30,9 +30,9 @@ struct Point {
     pub commit_custom_params: String,
 }
 
-fn main() -> Result<(), serde_yaml::Error> {
+fn main() -> Result<(), serde_json::Error> {
     let yaml = include_str!("../fixfures/config.yml");
-    let deserialized_point: Point = serde_yaml::from_str(&yaml)?;
+    let deserialized_point: Point = serde_json::from_str(&yaml)?;
     let custom_args = parse_custom_args(&deserialized_point.commit_custom_params);
     println!("custom_args: {}", custom_args);
     let test_re = Regex::new(&deserialized_point.dev_issue_re).unwrap();
