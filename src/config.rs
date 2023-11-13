@@ -20,11 +20,19 @@ pub struct Config {
     pub commit_link_description: String,
     pub remote_branch_name_template: String,
     pub commit_custom_params: String,
+    pub git_flow: Vec<HashMap<String, String>>,
 }
+#[cfg(target_os = "windows")]
+pub const CONFIG_PATH: &str = "C:\\etc\\ncommit.toml";
+
+
+#[cfg(not(target_os = "windows"))]
+pub const CONFIG_PATH: &str = "/etc/ncommit.toml";
 
 #[cfg(target_os = "windows")]
-pub fn load_config() -> Result<Config, Box<dyn Error>> {
-    let toml_text: String = fs::read_to_string("C:\\etc\\ncommit.toml")?;
+pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
+    // let toml_text: String = fs::read_to_string("C:\\etc\\ncommit.toml")?;
+    let toml_text: String = fs::read_to_string(config_path)?;
 
     let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
         Ok(config_map) => config_map,
@@ -61,8 +69,9 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn load_config() -> Result<Config, Box<dyn Error>> {
-    let toml_text: String = fs::read_to_string("/etc/ncommit.toml")?;
+pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
+    // let toml_text: String = fs::read_to_string("/etc/ncommit.toml")?;
+    let toml_text: String = fs::read_to_string(config_path)?;
 
     let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
         Ok(config_map) => config_map,

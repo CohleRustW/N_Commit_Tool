@@ -9,8 +9,10 @@ use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
 use version_compare::Version;
-
+use log::error;
 mod config;
+mod flow;
+use anyhow::Result as Aresult;
 #[macro_use]
 extern crate colour;
 
@@ -57,6 +59,17 @@ pub struct Args {
     new_branch: String,
 
     #[clap(
+        short = 'f',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    flow: String,
+
+    #[clap(
         short = 'c',
         long,
         takes_value = false,
@@ -72,6 +85,26 @@ pub struct Args {
 struct Foo {
     number: usize,
     title: String,
+}
+
+fn parse_branch_issue_id () -> String {
+    if let Ok(branch_name) = get_branch() {
+        let branch = String::from_utf8_lossy(&branch_name);
+        let branch_id_re: Regex = Regex::new(r".*(\d+).*").unwrap();
+        if branch_id_re.is_match(&branch) {
+            let issue_id = branch_id_re.captures(&branch).unwrap().get(1).unwrap().as_str().to_string();
+            issue_id
+        }else {
+            let msg = format!("通过 branch name -> {} 没有匹配到 issue ID", branch);
+            error!("{}", msg);
+            std::process::exit(1);
+
+        }
+    } else {
+        error!("没搞到分支名称");
+        std::process::exit(1);
+    }
+
 }
 
 fn get_branch() -> CResult<Vec<u8>, Box<std::io::Error>> {
@@ -280,8 +313,9 @@ fn checkout_branch(target_branch: String) {
 }
 
 fn main() {
+    simple_logger::SimpleLogger::new().env().init().unwrap();
     let yaml_config: config::Config;
-    match config::load_config() {
+    match config::load_config(config::CONFIG_PATH) {
         Ok(config) => {
             yaml_config = config;
         }
@@ -300,6 +334,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
+    }
+    if args.flow == "true" {
+        use flow::parse_flow_command;
+        parse_flow_command(&args, &yaml_config)
     }
     // "-m" show maximum number of issues to fetch
     if let Ok(result) = Command::new("gh")
@@ -590,5 +628,11 @@ mod tests {
             render_branch_name_by_tmp(version, temp),
             "v1.0.0-dev".to_string()
         )
+    }
+    #[test]
+    fn test_get_current_id () {
+        simple_logger::SimpleLogger::new().env().init().unwrap();
+        let id = parse_branch_issue_id();
+        error!("{}1111", id)
     }
 }
