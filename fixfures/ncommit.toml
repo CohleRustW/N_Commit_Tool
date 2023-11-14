@@ -33,8 +33,8 @@ commit_custom_params= ""
 2 = "for_test"
 
 ['/home/murphy/rust/N_Commit_Tool']
-remote_name= "Tencent"
-dev_issue_re= '''.*issue_(\d+)_.*'''
+remote_name= "origin"
+dev_issue_re= '''.*issue#?(\d+).*'''
 enable_auto_fetch= true
 version_compare_re='''v(\d{1,2}\.\d{1,2}\.\d{1,2})-dev'''
 dev_issue_name_header= "_V2.3.X/dev_issue#"

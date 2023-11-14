@@ -184,4 +184,22 @@ mod tests {
         }
         // let sorted_hashmap: Vec<_> = config.git_flow.iter();
     }
+    #[test]
+    fn test_branch_re() {
+        use regex::Regex;
+        use crate::config;
+        let config = config::load_config(config::CONFIG_PATH).unwrap();
+        use crate::parse_branch_issue_id;
+        let re = Regex::new(r".*issue#?(\d+).*").unwrap();
+        let branch_name = "_V2.3.X/dev_issue#27".to_string();
+        if re.is_match(&branch_name) {
+            let caps = re.captures(&branch_name).unwrap();
+            println!("{:?}", caps.get(1).unwrap().as_str());
+        }else {
+            println!("no match");
+            std::process::exit(1);
+        }
+        let id = parse_branch_issue_id(&config);
+        println!("{:?}", id);
+    }
 }
