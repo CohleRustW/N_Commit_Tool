@@ -2,10 +2,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::mem;
+use std::path::PathBuf;
 use std::process::Command;
 use std::{fs, str};
-use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -25,9 +24,9 @@ pub struct Config {
 #[cfg(target_os = "windows")]
 pub const CONFIG_PATH: &str = "C:\\etc\\ncommit.toml";
 
-
 #[cfg(not(target_os = "windows"))]
 pub const CONFIG_PATH: &str = "/etc/ncommit.toml";
+// pub const CONFIG_PATH: &str = "/home/murphy/rust/N_Commit_Tool/fixfures/ncommit.toml";
 
 #[cfg(target_os = "windows")]
 pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
@@ -93,7 +92,6 @@ pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
         } else {
             result_config = None;
         };
-
     }
     match result_config {
         Some(config) => {}

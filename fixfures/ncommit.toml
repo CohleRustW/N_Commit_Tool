@@ -34,7 +34,7 @@ commit_custom_params= ""
 
 ['/home/murphy/rust/N_Commit_Tool']
 remote_name= "Tencent"
-dev_issue_re= '''.*issue#?(\d+).*'''
+dev_issue_re= '''.*issue_(\d+)_.*'''
 enable_auto_fetch= true
 version_compare_re='''v(\d{1,2}\.\d{1,2}\.\d{1,2})-dev'''
 dev_issue_name_header= "_V2.3.X/dev_issue#"
@@ -46,7 +46,7 @@ commit_link_description='closed'
 commit_custom_params= ""
 
 [['/home/murphy/rust/N_Commit_Tool'.git_flow]]
-1 = "blockon"
-2 = "for_test"
-100 = "for_test"
-2000 = "for_test"
+1 = "bug"
+2 = "documentation"
+100 = "duplicate"
+2000 = "1111"
