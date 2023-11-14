@@ -31,6 +31,7 @@ pub const CONFIG_PATH: &str = "/etc/ncommit.toml";
 #[cfg(target_os = "windows")]
 pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
     // let toml_text: String = fs::read_to_string("C:\\etc\\ncommit.toml")?;
+    use std::mem;
     let toml_text: String = fs::read_to_string(config_path)?;
 
     let config_map: HashMap<String, Config> = match toml::from_str(&toml_text) {
