@@ -108,7 +108,9 @@ impl GitCommand for GitFlowCommand {
                 }
             }
         }
-        let label_msg = format!("选择你想要切换到的标签, 当前 issue id: {}", self.id);
+        let in_config_labels = current_labels.iter().filter(|label| choice_labels.contains(label)).collect::<Vec<&String>>();
+        let covert_config_labels = in_config_labels.iter().map(|label| label.as_str()).collect::<Vec<&str>>().join(",");
+        let label_msg = format!("选择你想要切换到的标签, 当前 Issue Id: [{}] 当前 Labels: [{}]", self.id, covert_config_labels);
         if let Ok(choice) = Select::new(&label_msg, choice_labels.clone()).prompt() {
             info!("选择了 {}", choice);
             self.run_command_and_check_code(
