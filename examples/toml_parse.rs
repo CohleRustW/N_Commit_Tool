@@ -1,7 +1,7 @@
-use std::fs;
-use std::collections::HashMap;
-use serde::Deserialize;
 use regex::Regex;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::fs;
 
 #[derive(Deserialize, Debug)]
 struct Project {

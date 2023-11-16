@@ -10,6 +10,10 @@ commit_append_nodeman_msg= false
 commit_append_msg= "(wf -l)"
 commit_link_description='closed'
 commit_custom_params= ""
+[['/Users/xcwang/code/gsekit'.git_flow]]
+1 = "blockon"
+2 = "for_test"
+
 
 ['/Users/xcwang/code/nodeman']
 remote_name= "Tencent"
@@ -23,3 +27,26 @@ commit_append_nodeman_msg= false
 commit_append_msg= "(wf -l)"
 commit_link_description='closed'
 commit_custom_params= ""
+
+[['/Users/xcwang/code/nodeman'.git_flow]]
+1 = "blockon"
+2 = "for_test"
+
+['/home/murphy/rust/N_Commit_Tool']
+remote_name= "origin"
+dev_issue_re= '''.*issue#?(\d+).*'''
+enable_auto_fetch= true
+version_compare_re='''v(\d{1,2}\.\d{1,2}\.\d{1,2})-dev'''
+dev_issue_name_header= "_V2.3.X/dev_issue#"
+remote_branch_name_template="v{{ number }}-dev"
+issue_title_filter_re='''\[(.*)\](.*)'''
+commit_append_nodeman_msg= false
+commit_append_msg= "(wf -l)"
+commit_link_description='closed'
+commit_custom_params= ""
+
+[['/home/murphy/rust/N_Commit_Tool'.git_flow]]
+1 = "bug"
+2 = "documentation"
+100 = "duplicate"
+2000 = "1111"

@@ -2,6 +2,7 @@ use clap::Parser;
 use handlebars::Handlebars;
 use inquire::Select;
 use inquire::Text;
+use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -9,8 +10,12 @@ use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
 use version_compare::Version;
-
 mod config;
+mod flow;
+mod view;
+use anyhow::Result as Aresult;
+use log::LevelFilter;
+
 #[macro_use]
 extern crate colour;
 
@@ -33,7 +38,7 @@ pub struct Args {
     )]
     print: String,
 
-    /// Open issue on chrome
+    /// 通过浏览器当前匹配到的 issue id 打开浏览器的对应页面，支持 issue/pr, example: ncommit -w pr/issue
     #[clap(
         short = 'w',
         long,
@@ -57,6 +62,17 @@ pub struct Args {
     new_branch: String,
 
     #[clap(
+        short = 'f',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    flow: String,
+
+    #[clap(
         short = 'c',
         long,
         takes_value = false,
@@ -66,12 +82,47 @@ pub struct Args {
         default_value = "false"
     )]
     chooise: String,
+
+    #[clap(
+        short = 'd',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    debug: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Foo {
     number: usize,
     title: String,
+}
+
+fn parse_branch_issue_id(config: &config::Config) -> String {
+    if let Ok(branch_name) = get_branch() {
+        let branch = String::from_utf8_lossy(&branch_name);
+        let branch_id_re: Regex = Regex::new(&config.dev_issue_re).unwrap();
+        if branch_id_re.is_match(&branch) {
+            let issue_id = branch_id_re
+                .captures(&branch)
+                .unwrap()
+                .get(1)
+                .unwrap()
+                .as_str()
+                .to_string();
+            issue_id
+        } else {
+            let msg = format!("通过 branch name -> {} 没有匹配到 issue ID", branch);
+            error!("{}", msg);
+            std::process::exit(1);
+        }
+    } else {
+        error!("没搞到分支名称");
+        std::process::exit(1);
+    }
 }
 
 fn get_branch() -> CResult<Vec<u8>, Box<std::io::Error>> {
@@ -280,8 +331,20 @@ fn checkout_branch(target_branch: String) {
 }
 
 fn main() {
+    let args = Args::parse();
+    //  如果 args.debug == true, 则打印 debug 日志
+    let level = if args.debug == "true" {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
+    simple_logger::SimpleLogger::new()
+        .with_level(level)
+        .init()
+        .unwrap();
+
     let yaml_config: config::Config;
-    match config::load_config() {
+    match config::load_config(config::CONFIG_PATH) {
         Ok(config) => {
             yaml_config = config;
         }
@@ -290,16 +353,17 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let args = Args::parse();
-    if args.web == "true" {
-        if let Ok(result) = Command::new("gh").args(["issue", "list", "--web"]).output() {
-            let code = result.status.code();
-            if code != Some(0) {
-                println!("{}", str::from_utf8(&result.stdout).unwrap());
-            } else {
-                std::process::exit(1);
-            }
-        }
+    if args.web != "false" {
+        use view::View;
+        let web_handler = view::ViewHandler::new(args.web);
+        web_handler.run_command()
+    }
+    if args.flow == "true" {
+        use flow::parse_flow_command;
+        let id = parse_branch_issue_id(&yaml_config);
+        //  转换为 i32
+        let id = id.parse::<i32>().unwrap();
+        parse_flow_command(id, "test".to_string())
     }
     // "-m" show maximum number of issues to fetch
     if let Ok(result) = Command::new("gh")
@@ -549,9 +613,6 @@ fn main() {
                                     } else {
                                         red!("{} failed !", c);
                                     }
-                                } else {
-                                    red!("miss title re");
-                                    std::process::exit(1);
                                 }
                             }
                         }
@@ -591,4 +652,10 @@ mod tests {
             "v1.0.0-dev".to_string()
         )
     }
+    // #[test]
+    // fn test_get_current_id() {
+    //     simple_logger::SimpleLogger::new().env().init().unwrap();
+    //     let id = parse_branch_issue_id();
+    //     error!("{}1111", id)
+    // }
 }
