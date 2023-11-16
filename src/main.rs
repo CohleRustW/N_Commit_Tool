@@ -83,6 +83,16 @@ pub struct Args {
     )]
     chooise: String,
 
+    #[clap(
+        short = 'd',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    debug: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -321,10 +331,18 @@ fn checkout_branch(target_branch: String) {
 }
 
 fn main() {
+    let args = Args::parse();
+    //  如果 args.debug == true, 则打印 debug 日志
+    let level = if args.debug == "true" {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
     simple_logger::SimpleLogger::new()
-        .with_level(LevelFilter::Info)
+        .with_level(level)
         .init()
         .unwrap();
+
     let yaml_config: config::Config;
     match config::load_config(config::CONFIG_PATH) {
         Ok(config) => {
@@ -335,16 +353,10 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let args = Args::parse();
-    if args.web == "true" {
-        if let Ok(result) = Command::new("gh").args(["issue", "list", "--web"]).output() {
-            let code = result.status.code();
-            if code != Some(0) {
-                println!("{}", str::from_utf8(&result.stdout).unwrap());
-            } else {
-                std::process::exit(1);
-            }
-        }
+    if args.web != "false" {
+        use view::View;
+        let web_handler = view::ViewHandler::new(args.web);
+        web_handler.run_command()
     }
     if args.flow == "true" {
         use flow::parse_flow_command;
@@ -601,9 +613,6 @@ fn main() {
                                     } else {
                                         red!("{} failed !", c);
                                     }
-                                } else {
-                                    red!("miss title re");
-                                    std::process::exit(1);
                                 }
                             }
                         }
