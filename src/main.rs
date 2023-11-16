@@ -38,7 +38,7 @@ pub struct Args {
     )]
     print: String,
 
-    /// Open issue on chrome
+    /// 通过浏览器当前匹配到的 issue id 打开浏览器的对应页面，支持 issue/pr, example: ncommit -w pr/issue
     #[clap(
         short = 'w',
         long,

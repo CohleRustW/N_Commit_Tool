@@ -1,7 +1,7 @@
 use crate::config;
 use crate::flow::GitCommand;
 use crate::parse_branch_issue_id;
-use log::{debug, error};
+use log::{debug, error, info};
 use regex::Regex;
 pub struct ViewHandler {
     command: String,
@@ -35,6 +35,7 @@ impl View for ViewHandler {
         if self.command == "issue" || self.command == "i" {
             self.open_issue_web(&issue_id);
         }
+        info!("打开浏览器目前支持的参数列表: [ pr | p | issue | i ]");
         std::process::exit(0);
     }
     fn open_pr_web(&self, issue_id: &str) {
