@@ -36,8 +36,23 @@ impl GitFlowCommand {
     }
 }
 
-trait GitCommand {
-    fn error_msg_transcate(&self, output: &str, msg: &str);
+pub trait GitCommand {
+    fn error_msg_transcate(&self, output: &str, msg: &str) {
+        use regex::Regex;
+        let label_nout_found = Regex::new(r"failed to update.* not found").unwrap();
+        let issue_id_not_found = Regex::new(r"GraphQL: Could not resolve to an issue or pull request with the number o.*").unwrap();
+        if label_nout_found.is_match(output) {
+            let log = format!("不存在的标签: {}", msg.to_string());
+            info!("{}", log);
+            return
+        }
+        if issue_id_not_found.is_match(output) {
+            let log = format!("不存在这个 ISSUE ID");
+            info!("{}", log);
+            return;
+        }
+        error!("{}", output)
+    }
     fn run_git_command_with_string(
         &self,
         command: &str,
@@ -63,11 +78,16 @@ trait GitCommand {
             std::process::exit(1);
         }
     }
+}
+
+trait GitFlowCommandFunc {
     fn get_labels(&self) -> Vec<String>;
     fn rebase_to_target_label(&self, target_label: &str);
 }
 
-impl GitCommand for GitFlowCommand {
+impl GitCommand for GitFlowCommand {}
+
+impl GitFlowCommandFunc for GitFlowCommand {
     fn get_labels(&self) -> Vec<String> {
         let command = format!("gh issue view {} --json labels", self.id);
         let output = self.run_command_and_check_code(command.as_str());
@@ -86,7 +106,7 @@ impl GitCommand for GitFlowCommand {
         let current_labels = self.get_labels();
         // 判断当前的 target_label 是否包括在 current_labels
         if current_labels.contains(&target_label.to_string()) {
-            info!("当前分支已经包含了 {} 标签", target_label);
+            info!("当前分支已经包;含了 {} 标签", target_label);
             std::process::exit(0);
         }
         use inquire::Select;
@@ -138,16 +158,6 @@ impl GitCommand for GitFlowCommand {
             std::process::exit(1);
         }
         std::process::exit(0);
-    }
-    fn error_msg_transcate(&self, output: &str, msg: &str) {
-        use regex::Regex;
-        let label_nout_found = Regex::new(r"failed to update.* not found").unwrap();
-        if label_nout_found.is_match(output) {
-            let log = format!("不存在的标签: {}", msg.to_string());
-            info!("{}", log);
-        } else {
-            error!("{}", output)
-        }
     }
 }
 

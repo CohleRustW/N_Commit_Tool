@@ -12,6 +12,7 @@ use std::str;
 use version_compare::Version;
 mod config;
 mod flow;
+mod view;
 use anyhow::Result as Aresult;
 use log::LevelFilter;
 
@@ -81,6 +82,7 @@ pub struct Args {
         default_value = "false"
     )]
     chooise: String,
+
 }
 
 #[derive(Serialize, Deserialize, Debug)]
