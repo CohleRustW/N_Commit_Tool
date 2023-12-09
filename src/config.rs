@@ -20,6 +20,7 @@ pub struct Config {
     pub remote_branch_name_template: String,
     pub commit_custom_params: String,
     pub git_flow: Vec<HashMap<String, String>>,
+    pub fork_remote_name: Option<String>,
 }
 #[cfg(target_os = "windows")]
 pub const CONFIG_PATH: &str = "C:\\etc\\ncommit.toml";
@@ -87,6 +88,7 @@ pub fn load_config(config_path: &str) -> Result<Config, Box<dyn Error>> {
         let current_path: String = get_current_path()?;
         let project_path: PathBuf = PathBuf::from(project_path.to_string());
         let current_path_buf: PathBuf = PathBuf::from(current_path.to_string());
+
         if current_path_buf == project_path {
             result_config = Some(project_config);
             break;

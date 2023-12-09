@@ -2,7 +2,6 @@ use clap::Parser;
 use handlebars::Handlebars;
 use inquire::Select;
 use inquire::Text;
-use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -12,14 +11,15 @@ use std::str;
 use version_compare::Version;
 mod config;
 mod flow;
+mod pr;
 mod view;
 use anyhow::Result as Aresult;
-use log::LevelFilter;
+use log::{debug, LevelFilter, error};
 
 #[macro_use]
 extern crate colour;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, about, long_about = None)]
 pub struct Args {
     /// custom commit message
@@ -93,6 +93,27 @@ pub struct Args {
         default_value = "false"
     )]
     debug: String,
+
+    #[clap(
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    pr: String,
+
+    #[clap(
+        short = 'f',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    force: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -157,6 +178,11 @@ fn custom_commit_params(custom_args: &str) -> String {
 }
 
 fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
+    debug!("all version list -> {:#?}", version_list);
+    if version_list.len() == 0 {
+        error!("没有匹配到的版本号\n");
+        std::process::exit(1);
+    };
     let mut version_numer: String = String::new();
     let numer_version_list = version_list.clone();
     for version in version_list {
@@ -166,6 +192,8 @@ fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
             version_numer = version.to_string();
         }
     }
+    debug!("biggerst version number -> {}", version_numer);
+    debug!("biggerst version number list -> {:#?}", numer_version_list);
     let number_index = numer_version_list
         .iter()
         .position(|x| x == &version_numer)
@@ -215,14 +243,14 @@ fn branch_prefix_strip(branch_name: &str) -> String {
     branch_name
 }
 
-#[warn(unused_assignments)]
-fn get_latest_issue(
+pub fn get_target_issue(
     choice: bool,
     version_re: &str,
     auto_fetch: bool,
     remote_name: &str,
     new_branch_base_format: &str,
-) -> (String, Vec<String>) {
+    skip_version_re: bool,
+) -> (String, String, Vec<String>) {
     let mut re_branchs: Vec<String> = Vec::new();
     let mut all_branchs: Vec<String> = Vec::new();
     let mut branch_pure_number: Vec<String> = Vec::new();
@@ -249,9 +277,11 @@ fn get_latest_issue(
 
     let branch_vec = String::from_utf8_lossy(&branchs.stdout);
     let branchs_vec: Vec<&str> = branch_vec.split("\n").collect();
+    debug!("branch list -> {:#?}", branchs_vec);
 
     for branch in branchs_vec {
         let branch_strip = branch_prefix_strip(branch);
+        debug!("branch_strip -> {}", branch_strip);
         if target_remote_branch_re.is_match(&branch_strip) {
             let remote_branch_name = target_remote_branch_re
                 .captures(&branch_strip)
@@ -263,21 +293,30 @@ fn get_latest_issue(
             all_branchs.push(remote_branch_name);
         }
         // all_branchs.push(branch_strip.clone());
-        if nodeman_re.is_match(&branch_strip) {
+        debug!(
+            "all remote {} branch list -> {:#?}",
+            remote_name, &all_branchs
+        );
+        if nodeman_re.is_match(&branch_strip) && !skip_version_re {
             let numer_re = nodeman_re.captures(&branch_strip).unwrap();
             let version_numer: &str = numer_re.get(1).unwrap().as_str();
             branch_pure_number.push(version_numer.to_string());
             re_branchs.push(branch_strip);
         }
     }
+    debug!("branch_pure_number -> {:#?}", &branch_pure_number);
+    if skip_version_re {
+        re_branchs = all_branchs.clone();
+    };
     if choice {
         let choice_branch = choose_base_branch(&all_branchs, remote_name);
-        (format!("{}/{}", remote_name, choice_branch), all_branchs)
+        (remote_name.to_string(), choice_branch.to_string(), all_branchs)
     } else {
         blue!(
             "match branch list -> {:?}, then choice biggerst version!\n",
             re_branchs
         );
+        debug!("all re branch list -> {:#?}", &re_branchs);
         if re_branchs.is_empty() {
             red!("no match branch by Regex: {}\n", version_re);
             std::process::exit(1);
@@ -288,8 +327,9 @@ fn get_latest_issue(
         let target_latest_branch_name =
             render_branch_name_by_tmp(&_latest_re_branch, &new_branch_base_format.to_string());
         (
-            format!("{}/{}", remote_name, target_latest_branch_name),
-            all_branchs,
+            remote_name.to_string(),
+            target_latest_branch_name.to_string(),
+            all_branchs
         )
     }
 }
@@ -353,6 +393,7 @@ fn main() {
             std::process::exit(1);
         }
     }
+    debug!("args -> {:#?}", args);
     if args.web != "false" {
         use view::View;
         let web_handler = view::ViewHandler::new(args.web);
@@ -365,9 +406,20 @@ fn main() {
         let id = id.parse::<i32>().unwrap();
         parse_flow_command(id, "test".to_string())
     }
+    let force = args.force == "true";
+    if args.pr == "true" {
+        use pr::{Pr, PrCommand};
+        let p = Pr::new(
+            args.chooise.clone(),
+            &yaml_config,
+            force,
+            args.chooise.clone(),
+        );
+        p.pr();
+    }
     // "-m" show maximum number of issues to fetch
     if let Ok(result) = Command::new("gh")
-        .args(["issue", "list", "--json", "number,title", "-L", "200"])
+        .args(["issue", "list", "--json", "number,title", "-L", "300"])
         .output()
     {
         if let Ok(branchs) = str::from_utf8(&result.stdout) {
@@ -411,12 +463,13 @@ fn main() {
                         } else {
                             choice_switch = false;
                         }
-                        let (latest_issue, all_branchs) = get_latest_issue(
+                        let (_, branch_name, all_branchs) = get_target_issue(
                             choice_switch,
                             &yaml_config.version_compare_re,
                             yaml_config.enable_auto_fetch,
                             &yaml_config.remote_name,
                             &yaml_config.remote_branch_name_template,
+                            false,
                         );
 
                         let new_branch = format!(
@@ -444,7 +497,7 @@ fn main() {
                         }
 
                         if let Ok(add_branch_result) = Command::new("git")
-                            .args(["checkout", "-b", &new_branch, &latest_issue])
+                            .args(["checkout", "-b", &new_branch, &branch_name])
                             .output()
                         {
                             let code = add_branch_result.status.code();
@@ -452,7 +505,7 @@ fn main() {
                                 green!(
                                     "checkout branch by command -> git checkout -b {} {}\n",
                                     new_branch,
-                                    latest_issue
+                                    branch_name
                                 );
                             } else {
                                 let checkout_result =
@@ -493,7 +546,7 @@ fn main() {
                                 red!(
                                     "checkout branch to {} with base barnch -> {} filed! \n{}",
                                     new_branch,
-                                    latest_issue,
+                                    branch_name,
                                     str::from_utf8(&add_branch_result.stderr).unwrap()
                                 );
                                 std::process::exit(1);
