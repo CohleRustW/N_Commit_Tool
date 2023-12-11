@@ -198,6 +198,8 @@ fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
         .iter()
         .position(|x| x == &version_numer)
         .unwrap();
+    debug!("biggerst version number index -> {}", number_index);
+    debug!("biggerst version number -> {}", version_numer);
     (version_numer, number_index)
 }
 
@@ -463,7 +465,7 @@ fn main() {
                         } else {
                             choice_switch = false;
                         }
-                        let (_, branch_name, all_branchs) = get_target_issue(
+                        let (remote_name, branch_name, all_branchs) = get_target_issue(
                             choice_switch,
                             &yaml_config.version_compare_re,
                             yaml_config.enable_auto_fetch,
@@ -471,11 +473,13 @@ fn main() {
                             &yaml_config.remote_branch_name_template,
                             false,
                         );
+                        let complate_brach_name = format!("{}/{}", remote_name, branch_name);
 
                         let new_branch = format!(
                             "{}{}",
                             &yaml_config.dev_issue_name_header, choice_issue_number
                         );
+                        debug!("new branch name -> {}", new_branch);
 
                         if all_branchs.contains(&&new_branch) {
                             red!("branch {} already exist, checkout!!!\n", new_branch);
@@ -496,8 +500,9 @@ fn main() {
                             std::process::exit(1);
                         }
 
+                        debug!("base branch command -> git checkout -b {} {}", &new_branch, complate_brach_name);
                         if let Ok(add_branch_result) = Command::new("git")
-                            .args(["checkout", "-b", &new_branch, &branch_name])
+                            .args(["checkout", "-b", &new_branch, &complate_brach_name])
                             .output()
                         {
                             let code = add_branch_result.status.code();
@@ -505,7 +510,7 @@ fn main() {
                                 green!(
                                     "checkout branch by command -> git checkout -b {} {}\n",
                                     new_branch,
-                                    branch_name
+                                    complate_brach_name 
                                 );
                             } else {
                                 let checkout_result =
@@ -546,7 +551,7 @@ fn main() {
                                 red!(
                                     "checkout branch to {} with base barnch -> {} filed! \n{}",
                                     new_branch,
-                                    branch_name,
+                                    complate_brach_name,
                                     str::from_utf8(&add_branch_result.stderr).unwrap()
                                 );
                                 std::process::exit(1);
