@@ -93,7 +93,7 @@ impl PrCommand for Pr {
         };
 
         let pr_cmd = format!(
-            "gh pr create -f -H \"{}:{}\" -B {} -F {}",
+            "gh pr create -f -H {}:{} -B {} -F {}",
             self.get_target_remote_username(),
             current_branch,
             self.biggerst_branch_name,
