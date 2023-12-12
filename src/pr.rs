@@ -57,6 +57,7 @@ impl Pr {
 pub trait PrCommand {
     fn pr(&self);
     fn get_pr_body(&self) -> String;
+    fn get_target_remote_username(&self) -> String;
 }
 
 impl PrCommand for Pr {
@@ -92,8 +93,11 @@ impl PrCommand for Pr {
         };
 
         let pr_cmd = format!(
-            "gh pr create -f -H {} -B {} -F {}",
-            current_branch, self.biggerst_branch_name, pr_body_path.display()
+            "gh pr create -f -H \"{}:{}\" -B {} -F {}",
+            self.get_target_remote_username(),
+            current_branch,
+            self.biggerst_branch_name,
+            pr_body_path.display()
         );
         info!("execute pr_cmd: {}", pr_cmd);
         let pr_result = self.run_command_and_check_code(&pr_cmd);
@@ -113,17 +117,80 @@ impl PrCommand for Pr {
             }
         }
     }
+    fn get_target_remote_username(&self) -> String {
+        let remote_result = self.run_command_and_check_code("git remote -v");
+        let remote_re_str = format!("{}(\\s+)(.*) (.*)", self.fork_remote);
+        let remote_re = regex::Regex::new(&remote_re_str).unwrap();
+        // 通过 remote result 获取 remote 的地址
+        let remote_str = std::string::String::from_utf8(remote_result).unwrap();
+        if let Some(remote_match) = remote_re.find(&remote_str) {
+            let remote_str = remote_re
+                .captures(&remote_str)
+                .unwrap()
+                .get(2)
+                .unwrap()
+                .as_str();
+            debug!("remote_url: {}", remote_str);
+            // 通过 remote 地址获取 remote 的用户名, 这里区分 http 和 ssh 的地址
+            let ssh_re_str = format!("git@(.*):(.*)/.*");
+            let http_re_str = format!("https://(.*)/(.*)/.*");
+            let ssh_re = regex::Regex::new(&ssh_re_str).unwrap();
+            let http_re = regex::Regex::new(&http_re_str).unwrap();
+            if let Some(ssh_match) = ssh_re.find(&remote_str) {
+                // fork    git@github.com:CohleRustW/bk-nodeman.git (fetch)
+                let username = ssh_re
+                    .captures(&remote_str)
+                    .unwrap()
+                    .get(2)
+                    .unwrap()
+                    .as_str();
+                debug!("ssh username: {}", username);
+                return username.to_string();
+            } else if let Some(http_match) = http_re.find(&remote_str) {
+                let username = http_re
+                    .captures(&remote_str)
+                    .unwrap()
+                    .get(2)
+                    .unwrap()
+                    .as_str();
+                debug!("http username: {}", username);
+                return username.trim().to_string();
+            } else {
+                error!("remote {} not found", self.fork_remote);
+                debug!("remote_str: {}", remote_str);
+                std::process::exit(1);
+            }
+        } else {
+            error!("remote {} not found", self.fork_remote);
+            debug!("remote_str: {}", remote_str);
+            std::process::exit(1);
+        }
+    }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_github_md () {
+    fn test_github_md() {
         let current_git_path = ".github/PULL_REQUEST_TEMPLATE.md";
         // 判断文件是否存在，如果存在就读取文件内容
         let pr_body = std::fs::read_to_string(current_git_path).unwrap();
         println!("{}", pr_body);
+    }
+
+    #[test]
+    fn test_get_remote_username() {
+        use log::LevelFilter;
+        simple_logger::SimpleLogger::new()
+            .with_level(LevelFilter::Debug)
+            .init()
+            .unwrap();
+        use crate::config::load_config;
+        use crate::config::CONFIG_PATH;
+        let config = load_config(CONFIG_PATH).unwrap();
+        let pr = Pr::new("".to_string(), &config, false, "false".to_string());
+        pr.get_target_remote_username();
+        // println!("{}", result);
     }
 }

@@ -12,6 +12,7 @@ use version_compare::Version;
 mod config;
 mod flow;
 mod pr;
+// mod tests;
 mod view;
 use anyhow::Result as Aresult;
 use log::{debug, LevelFilter, error};
