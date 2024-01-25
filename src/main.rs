@@ -5,6 +5,7 @@ use inquire::Text;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fmt::Result;
 use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
@@ -228,13 +229,24 @@ fn render_branch_name_by_tmp(branch_number: &str, tmp: &str) -> String {
 }
 
 fn lower_and_bug_head_replace(source: &str) -> String {
-    let lower_source = source.to_lowercase();
-    let bug_re: Regex = Regex::new(r"bug$").unwrap();
-    if bug_re.is_match(&lower_source) {
-        let result: String = lower_source.replace("bug", "bugfix");
-        result
+    let replace_re: Regex = Regex::new(r"\[.*\]").unwrap();
+    let lower_source = if replace_re.is_match(source) {
+        source.replace("[", "").replace("]", "").to_lowercase()
     } else {
-        lower_source
+        source.to_lowercase()
+    };
+    use regex::RegexSet;
+
+    let re: RegexSet = RegexSet::new(&[r"bugfix$", r"feature$", r"minor$", r"optimization$", r"sprintfix$", r"refactor$"]).unwrap();
+    let matches = re.matches(&lower_source);
+    match matches.iter().next() {
+        Some(0) => lower_source.replace("bugfix", "fix"),
+        Some(1) => lower_source.replace("feature", "feat"),
+        Some(2) => lower_source.replace("minor", "docs"),
+        Some(3) => lower_source.replace("optimization", "style"),
+        Some(4) => lower_source.replace("sprintfix", "refactor"),
+        Some(5) => lower_source.replace("refactor", "perf"),
+        _ => lower_source
     }
 }
 
