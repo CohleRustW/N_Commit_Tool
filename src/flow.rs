@@ -1,0 +1,246 @@
+use crate::config::load_config;
+use crate::config::Config;
+use crate::config::CONFIG_PATH;
+use log::{debug, error, info};
+use std::collections::HashMap;
+use std::process::Command;
+
+fn parse_flow_config(
+) -> HashMap<std::string::String, HashMap<std::string::String, std::string::String>> {
+    let mut configs = HashMap::new();
+    for i in 1..4 {
+        let mut lable_config = HashMap::new();
+        let lable_name = format!("{}{}", "lable", i);
+        lable_config.insert("label".to_string(), lable_name);
+        configs.insert(i.to_string(), lable_config);
+    }
+    configs
+}
+
+struct GitFlowCommand {
+    id: i32,
+    command: String,
+    config: Config,
+}
+
+impl GitFlowCommand {
+    fn new(issue_id: i32, command: String) -> GitFlowCommand {
+        // let git_args: Vec<String> = git_args.split(" ").map(str::to_string).collect();
+        let config = load_config(CONFIG_PATH).unwrap();
+
+        GitFlowCommand {
+            id: issue_id,
+            command: command,
+            config: config,
+        }
+    }
+}
+
+pub trait GitCommand {
+    fn error_msg_transcate(&self, output: &str, msg: &str) {
+        use regex::Regex;
+        let label_nout_found = Regex::new(r"failed to update.* not found").unwrap();
+        let issue_id_not_found = Regex::new(
+            r"GraphQL: Could not resolve to an issue or pull request with the number o.*",
+        )
+        .unwrap();
+        if label_nout_found.is_match(output) {
+            let log = format!("不存在的标签: {}", msg.to_string());
+            info!("{}", log);
+            return;
+        }
+        if issue_id_not_found.is_match(output) {
+            let log = format!("不存在这个 ISSUE ID");
+            info!("{}", log);
+            return;
+        }
+        let pr_exist =
+            Regex::new(r"a pull request for branch.* into branch .*already exists:").unwrap();
+        if pr_exist.is_match(output) {
+            let log = format!("已经存在这个 PR");
+            info!("{}", log);
+        }
+        let no_version_branch = Regex::new(r"could not compute title or body defaults: failed to run git.*unknown revision or path not in the working tree").unwrap();
+        if no_version_branch.is_match(output) {
+            let log = format!("下面这个报错应该是本地没有这个分支, 请先拉取远程分支: git fetch --all");
+            error!("{}", log);
+        }
+        error!("{}", output)
+    }
+    fn run_git_command_with_string(
+        &self,
+        command: &str,
+    ) -> Result<std::process::Output, std::io::Error> {
+        let commands = command.split(" ").collect::<Vec<&str>>();
+        let git_command = commands[0];
+        let git_args = &commands[1..];
+        let strip_args = git_args
+            .iter()
+            .map(|arg| arg.replace("\n", "").to_string()) // Change the type to String
+            .collect::<Vec<String>>(); // Change the type to Vec<String>
+        debug!("git command: {}, git args: {:#?}", git_command, strip_args);
+        Command::new(git_command).args(strip_args).output()
+    }
+    fn run_command_and_check_code(&self, command: &str) -> Vec<u8> {
+        if let Ok(output) = self.run_git_command_with_string(command) {
+            let code = output.status.code().unwrap();
+            if code != 0 {
+                let last_args = command.split(" ").last().unwrap();
+                self.error_msg_transcate(&String::from_utf8_lossy(&output.stderr), last_args);
+                std::process::exit(code);
+            } else {
+                debug!("{}", String::from_utf8_lossy(&output.stdout));
+                output.stdout
+            }
+        } else {
+            error!("execute git command : {} failed!", command);
+            std::process::exit(1);
+        }
+    }
+}
+
+trait GitFlowCommandFunc {
+    fn get_labels(&self) -> Vec<String>;
+    fn rebase_to_target_label(&self, target_label: &str);
+}
+
+impl GitCommand for GitFlowCommand {}
+
+impl GitFlowCommandFunc for GitFlowCommand {
+    fn get_labels(&self) -> Vec<String> {
+        let command = format!("gh issue view {} --json labels", self.id);
+        let output = self.run_command_and_check_code(command.as_str());
+        // 把 output 转换成 json
+        let json = String::from_utf8_lossy(&output);
+        let json: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let labels = json["labels"].as_array().unwrap();
+        let labels: Vec<String> = labels
+            .iter()
+            .map(|label| label["name"].as_str().unwrap().to_string())
+            .collect();
+        labels
+    }
+
+    fn rebase_to_target_label(&self, target_label: &str) {
+        let current_labels = self.get_labels();
+        // 判断当前的 target_label 是否包括在 current_labels
+        if current_labels.contains(&target_label.to_string()) {
+            info!("当前分支已经包;含了 {} 标签", target_label);
+            std::process::exit(0);
+        }
+        use inquire::Select;
+        let mut choice_labels = Vec::new();
+        let mut keys: Vec<i32> = self
+            .config
+            .git_flow
+            .iter()
+            .flat_map(|hashmap| hashmap.keys())
+            .map(|key| key.parse::<i32>().unwrap())
+            .collect();
+        keys.sort_unstable();
+
+        for key in keys {
+            for iter in self.config.git_flow.iter() {
+                if iter.contains_key(&key.to_string()) {
+                    let label = iter.get(&key.to_string()).unwrap();
+                    choice_labels.push(label);
+                }
+            }
+        }
+        let in_config_labels = current_labels
+            .iter()
+            .filter(|label| choice_labels.contains(label))
+            .collect::<Vec<&String>>();
+        let covert_config_labels = in_config_labels
+            .iter()
+            .map(|label| label.as_str())
+            .collect::<Vec<&str>>()
+            .join(",");
+        let label_msg = format!(
+            "选择你想要切换到的标签, 当前 Issue Id: [{}] 当前 Labels: [{}]",
+            self.id, covert_config_labels
+        );
+        if let Ok(choice) = Select::new(&label_msg, choice_labels.clone()).prompt() {
+            info!("选择了 {}", choice);
+            self.run_command_and_check_code(
+                format!("gh issue edit {} --add-label {}", self.id, choice).as_str(),
+            );
+            // 删除其他的标签，保留当前的标签
+            let mut to_be_delete_labels = current_labels
+                .iter()
+                .filter(|label| choice_labels.contains(label))
+                .collect::<Vec<&String>>();
+            to_be_delete_labels.retain(|label| label != &choice);
+            debug!("需要删除的标签: {:?}", to_be_delete_labels);
+            for delete_label in to_be_delete_labels {
+                let remove_command =
+                    format!("gh issue edit {} --remove-label {}", self.id, delete_label);
+                let output = self.run_command_and_check_code(&remove_command);
+                info!(
+                    "删除标签 {} \n {:?}",
+                    delete_label,
+                    String::from_utf8_lossy(&output)
+                );
+            }
+        } else {
+            red!("no choice label\n");
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
+}
+
+pub fn parse_flow_command(id: i32, command: String) {
+    let flow_command = GitFlowCommand::new(id, command);
+    flow_command.rebase_to_target_label("lable1");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_flow_pars() {
+        simple_logger::SimpleLogger::new().env().init().unwrap();
+        println!("{:?}", parse_flow_config());
+        let flow_command = GitFlowCommand::new(27, "test".to_string());
+        let labels = flow_command.get_labels();
+        println!("{:?}", labels);
+    }
+    #[test]
+    fn test_flow_config_parse() {
+        use crate::config::load_config;
+        let config = load_config("/home/murphy/rust/N_Commit_Tool/fixfures/ncommit.toml").unwrap();
+        let mut keys: Vec<i32> = config
+            .git_flow
+            .iter()
+            .flat_map(|hashmap| hashmap.keys())
+            .map(|key| key.parse::<i32>().unwrap())
+            .collect();
+        keys.sort_unstable();
+        println!("{:?}", keys);
+        println!("{:?}", keys[keys.len() - 1]);
+
+        for i in config.git_flow {
+            println!("{:?}", i)
+        }
+        // let sorted_hashmap: Vec<_> = config.git_flow.iter();
+    }
+    #[test]
+    fn test_branch_re() {
+        use crate::config;
+        use regex::Regex;
+        let config = config::load_config(config::CONFIG_PATH).unwrap();
+        use crate::parse_branch_issue_id;
+        let re = Regex::new(r".*issue#?(\d+).*").unwrap();
+        let branch_name = "_V2.3.X/dev_issue#27".to_string();
+        if re.is_match(&branch_name) {
+            let caps = re.captures(&branch_name).unwrap();
+            println!("{:?}", caps.get(1).unwrap().as_str());
+        } else {
+            println!("no match");
+            std::process::exit(1);
+        }
+        let id = parse_branch_issue_id(&config);
+        println!("{:?}", id);
+    }
+}

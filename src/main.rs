@@ -5,16 +5,23 @@ use inquire::Text;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fmt::Result;
 use std::process::Command;
 use std::result::Result as CResult;
 use std::str;
 use version_compare::Version;
-
 mod config;
+mod flow;
+mod pr;
+// mod tests;
+mod view;
+use anyhow::Result as Aresult;
+use log::{debug, LevelFilter, error};
+
 #[macro_use]
 extern crate colour;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, about, long_about = None)]
 pub struct Args {
     /// custom commit message
@@ -33,7 +40,7 @@ pub struct Args {
     )]
     print: String,
 
-    /// Open issue on chrome
+    /// 通过浏览器当前匹配到的 issue id 打开浏览器的对应页面，支持 issue/pr, example: ncommit -w pr/issue
     #[clap(
         short = 'w',
         long,
@@ -57,6 +64,17 @@ pub struct Args {
     new_branch: String,
 
     #[clap(
+        short = 'f',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    flow: String,
+
+    #[clap(
         short = 'c',
         long,
         takes_value = false,
@@ -66,12 +84,68 @@ pub struct Args {
         default_value = "false"
     )]
     chooise: String,
+
+    #[clap(
+        short = 'd',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    debug: String,
+
+    #[clap(
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    pr: String,
+
+    #[clap(
+        short = 'f',
+        long,
+        takes_value = false,
+        forbid_empty_values = false,
+        required = false,
+        default_missing_value = "true",
+        default_value = "false"
+    )]
+    force: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Foo {
     number: usize,
     title: String,
+}
+
+fn parse_branch_issue_id(config: &config::Config) -> String {
+    if let Ok(branch_name) = get_branch() {
+        let branch = String::from_utf8_lossy(&branch_name);
+        let branch_id_re: Regex = Regex::new(&config.dev_issue_re).unwrap();
+        if branch_id_re.is_match(&branch) {
+            let issue_id = branch_id_re
+                .captures(&branch)
+                .unwrap()
+                .get(1)
+                .unwrap()
+                .as_str()
+                .to_string();
+            issue_id
+        } else {
+            let msg = format!("通过 branch name -> {} 没有匹配到 issue ID", branch);
+            error!("{}", msg);
+            std::process::exit(1);
+        }
+    } else {
+        error!("没搞到分支名称");
+        std::process::exit(1);
+    }
 }
 
 fn get_branch() -> CResult<Vec<u8>, Box<std::io::Error>> {
@@ -106,6 +180,11 @@ fn custom_commit_params(custom_args: &str) -> String {
 }
 
 fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
+    debug!("all version list -> {:#?}", version_list);
+    if version_list.len() == 0 {
+        error!("没有匹配到的版本号\n");
+        std::process::exit(1);
+    };
     let mut version_numer: String = String::new();
     let numer_version_list = version_list.clone();
     for version in version_list {
@@ -115,10 +194,14 @@ fn biggerst_version_number(version_list: Vec<String>) -> (String, usize) {
             version_numer = version.to_string();
         }
     }
+    debug!("biggerst version number -> {}", version_numer);
+    debug!("biggerst version number list -> {:#?}", numer_version_list);
     let number_index = numer_version_list
         .iter()
         .position(|x| x == &version_numer)
         .unwrap();
+    debug!("biggerst version number index -> {}", number_index);
+    debug!("biggerst version number -> {}", version_numer);
     (version_numer, number_index)
 }
 
@@ -146,13 +229,24 @@ fn render_branch_name_by_tmp(branch_number: &str, tmp: &str) -> String {
 }
 
 fn lower_and_bug_head_replace(source: &str) -> String {
-    let lower_source = source.to_lowercase();
-    let bug_re: Regex = Regex::new(r"bug$").unwrap();
-    if bug_re.is_match(&lower_source) {
-        let result: String = lower_source.replace("bug", "bugfix");
-        result
+    let replace_re: Regex = Regex::new(r"\[.*\]").unwrap();
+    let lower_source = if replace_re.is_match(source) {
+        source.replace("[", "").replace("]", "").to_lowercase()
     } else {
-        lower_source
+        source.to_lowercase()
+    };
+    use regex::RegexSet;
+
+    let re: RegexSet = RegexSet::new(&[r"bugfix$", r"feature$", r"minor$", r"optimization$", r"sprintfix$", r"refactor$"]).unwrap();
+    let matches = re.matches(&lower_source);
+    match matches.iter().next() {
+        Some(0) => lower_source.replace("bugfix", "fix"),
+        Some(1) => lower_source.replace("feature", "feat"),
+        Some(2) => lower_source.replace("minor", "docs"),
+        Some(3) => lower_source.replace("optimization", "style"),
+        Some(4) => lower_source.replace("sprintfix", "refactor"),
+        Some(5) => lower_source.replace("refactor", "perf"),
+        _ => lower_source
     }
 }
 
@@ -164,14 +258,14 @@ fn branch_prefix_strip(branch_name: &str) -> String {
     branch_name
 }
 
-#[warn(unused_assignments)]
-fn get_latest_issue(
+pub fn get_target_issue(
     choice: bool,
     version_re: &str,
     auto_fetch: bool,
     remote_name: &str,
     new_branch_base_format: &str,
-) -> (String, Vec<String>) {
+    skip_version_re: bool,
+) -> (String, String, Vec<String>) {
     let mut re_branchs: Vec<String> = Vec::new();
     let mut all_branchs: Vec<String> = Vec::new();
     let mut branch_pure_number: Vec<String> = Vec::new();
@@ -198,9 +292,11 @@ fn get_latest_issue(
 
     let branch_vec = String::from_utf8_lossy(&branchs.stdout);
     let branchs_vec: Vec<&str> = branch_vec.split("\n").collect();
+    debug!("branch list -> {:#?}", branchs_vec);
 
     for branch in branchs_vec {
         let branch_strip = branch_prefix_strip(branch);
+        debug!("branch_strip -> {}", branch_strip);
         if target_remote_branch_re.is_match(&branch_strip) {
             let remote_branch_name = target_remote_branch_re
                 .captures(&branch_strip)
@@ -212,21 +308,30 @@ fn get_latest_issue(
             all_branchs.push(remote_branch_name);
         }
         // all_branchs.push(branch_strip.clone());
-        if nodeman_re.is_match(&branch_strip) {
+        debug!(
+            "all remote {} branch list -> {:#?}",
+            remote_name, &all_branchs
+        );
+        if nodeman_re.is_match(&branch_strip) && !skip_version_re {
             let numer_re = nodeman_re.captures(&branch_strip).unwrap();
             let version_numer: &str = numer_re.get(1).unwrap().as_str();
             branch_pure_number.push(version_numer.to_string());
             re_branchs.push(branch_strip);
         }
     }
+    debug!("branch_pure_number -> {:#?}", &branch_pure_number);
+    if skip_version_re {
+        re_branchs = all_branchs.clone();
+    };
     if choice {
         let choice_branch = choose_base_branch(&all_branchs, remote_name);
-        (format!("{}/{}", remote_name, choice_branch), all_branchs)
+        (remote_name.to_string(), choice_branch.to_string(), all_branchs)
     } else {
         blue!(
             "match branch list -> {:?}, then choice biggerst version!\n",
             re_branchs
         );
+        debug!("all re branch list -> {:#?}", &re_branchs);
         if re_branchs.is_empty() {
             red!("no match branch by Regex: {}\n", version_re);
             std::process::exit(1);
@@ -237,8 +342,9 @@ fn get_latest_issue(
         let target_latest_branch_name =
             render_branch_name_by_tmp(&_latest_re_branch, &new_branch_base_format.to_string());
         (
-            format!("{}/{}", remote_name, target_latest_branch_name),
-            all_branchs,
+            remote_name.to_string(),
+            target_latest_branch_name.to_string(),
+            all_branchs
         )
     }
 }
@@ -280,8 +386,20 @@ fn checkout_branch(target_branch: String) {
 }
 
 fn main() {
+    let args = Args::parse();
+    //  如果 args.debug == true, 则打印 debug 日志
+    let level = if args.debug == "true" {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
+    simple_logger::SimpleLogger::new()
+        .with_level(level)
+        .init()
+        .unwrap();
+
     let yaml_config: config::Config;
-    match config::load_config() {
+    match config::load_config(config::CONFIG_PATH) {
         Ok(config) => {
             yaml_config = config;
         }
@@ -290,20 +408,33 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let args = Args::parse();
-    if args.web == "true" {
-        if let Ok(result) = Command::new("gh").args(["issue", "list", "--web"]).output() {
-            let code = result.status.code();
-            if code != Some(0) {
-                println!("{}", str::from_utf8(&result.stdout).unwrap());
-            } else {
-                std::process::exit(1);
-            }
-        }
+    debug!("args -> {:#?}", args);
+    if args.web != "false" {
+        use view::View;
+        let web_handler = view::ViewHandler::new(args.web);
+        web_handler.run_command()
+    }
+    if args.flow == "true" {
+        use flow::parse_flow_command;
+        let id = parse_branch_issue_id(&yaml_config);
+        //  转换为 i32
+        let id = id.parse::<i32>().unwrap();
+        parse_flow_command(id, "test".to_string())
+    }
+    let force = args.force == "true";
+    if args.pr == "true" {
+        use pr::{Pr, PrCommand};
+        let p = Pr::new(
+            args.chooise.clone(),
+            &yaml_config,
+            force,
+            args.chooise.clone(),
+        );
+        p.pr();
     }
     // "-m" show maximum number of issues to fetch
     if let Ok(result) = Command::new("gh")
-        .args(["issue", "list", "--json", "number,title", "-L", "200"])
+        .args(["issue", "list", "--json", "number,title", "-L", "300"])
         .output()
     {
         if let Ok(branchs) = str::from_utf8(&result.stdout) {
@@ -347,18 +478,21 @@ fn main() {
                         } else {
                             choice_switch = false;
                         }
-                        let (latest_issue, all_branchs) = get_latest_issue(
+                        let (remote_name, branch_name, all_branchs) = get_target_issue(
                             choice_switch,
                             &yaml_config.version_compare_re,
                             yaml_config.enable_auto_fetch,
                             &yaml_config.remote_name,
                             &yaml_config.remote_branch_name_template,
+                            false,
                         );
+                        let complate_brach_name = format!("{}/{}", remote_name, branch_name);
 
                         let new_branch = format!(
                             "{}{}",
                             &yaml_config.dev_issue_name_header, choice_issue_number
                         );
+                        debug!("new branch name -> {}", new_branch);
 
                         if all_branchs.contains(&&new_branch) {
                             red!("branch {} already exist, checkout!!!\n", new_branch);
@@ -379,8 +513,9 @@ fn main() {
                             std::process::exit(1);
                         }
 
+                        debug!("base branch command -> git checkout -b {} {}", &new_branch, complate_brach_name);
                         if let Ok(add_branch_result) = Command::new("git")
-                            .args(["checkout", "-b", &new_branch, &latest_issue])
+                            .args(["checkout", "-b", &new_branch, &complate_brach_name])
                             .output()
                         {
                             let code = add_branch_result.status.code();
@@ -388,7 +523,7 @@ fn main() {
                                 green!(
                                     "checkout branch by command -> git checkout -b {} {}\n",
                                     new_branch,
-                                    latest_issue
+                                    complate_brach_name 
                                 );
                             } else {
                                 let checkout_result =
@@ -429,7 +564,7 @@ fn main() {
                                 red!(
                                     "checkout branch to {} with base barnch -> {} filed! \n{}",
                                     new_branch,
-                                    latest_issue,
+                                    complate_brach_name,
                                     str::from_utf8(&add_branch_result.stderr).unwrap()
                                 );
                                 std::process::exit(1);
@@ -549,9 +684,6 @@ fn main() {
                                     } else {
                                         red!("{} failed !", c);
                                     }
-                                } else {
-                                    red!("miss title re");
-                                    std::process::exit(1);
                                 }
                             }
                         }
@@ -591,4 +723,10 @@ mod tests {
             "v1.0.0-dev".to_string()
         )
     }
+    // #[test]
+    // fn test_get_current_id() {
+    //     simple_logger::SimpleLogger::new().env().init().unwrap();
+    //     let id = parse_branch_issue_id();
+    //     error!("{}1111", id)
+    // }
 }
