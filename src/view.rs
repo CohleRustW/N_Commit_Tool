@@ -64,7 +64,7 @@ impl View for ViewHandler {
                                 format!("gh pr view {} --web", pr["number"].as_i64().unwrap());
                             debug!("command: {}", &command);
                             self.run_command_and_check_code(&command);
-                            return;
+                            std::process::exit(0);
                         }
                     }
                 }
@@ -76,10 +76,12 @@ impl View for ViewHandler {
     fn open_issue_web(&self, issue_id: &str) {
         let command = format!("gh issue view {} --web", issue_id);
         self.run_command_and_check_code(&command);
+        std::process::exit(0);
     }
     fn open_default_web(&self) {
         let command = "gh issue list --web".to_string();
         self.run_command_and_check_code(&command);
+        std::process::exit(0);
     }
 }
 

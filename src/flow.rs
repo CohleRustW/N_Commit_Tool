@@ -40,16 +40,30 @@ pub trait GitCommand {
     fn error_msg_transcate(&self, output: &str, msg: &str) {
         use regex::Regex;
         let label_nout_found = Regex::new(r"failed to update.* not found").unwrap();
-        let issue_id_not_found = Regex::new(r"GraphQL: Could not resolve to an issue or pull request with the number o.*").unwrap();
+        let issue_id_not_found = Regex::new(
+            r"GraphQL: Could not resolve to an issue or pull request with the number o.*",
+        )
+        .unwrap();
         if label_nout_found.is_match(output) {
             let log = format!("不存在的标签: {}", msg.to_string());
             info!("{}", log);
-            return
+            return;
         }
         if issue_id_not_found.is_match(output) {
             let log = format!("不存在这个 ISSUE ID");
             info!("{}", log);
             return;
+        }
+        let pr_exist =
+            Regex::new(r"a pull request for branch.* into branch .*already exists:").unwrap();
+        if pr_exist.is_match(output) {
+            let log = format!("已经存在这个 PR");
+            info!("{}", log);
+        }
+        let no_version_branch = Regex::new(r"could not compute title or body defaults: failed to run git.*unknown revision or path not in the working tree").unwrap();
+        if no_version_branch.is_match(output) {
+            let log = format!("下面这个报错应该是本地没有这个分支, 请先拉取远程分支: git fetch --all");
+            error!("{}", log);
         }
         error!("{}", output)
     }
@@ -60,7 +74,12 @@ pub trait GitCommand {
         let commands = command.split(" ").collect::<Vec<&str>>();
         let git_command = commands[0];
         let git_args = &commands[1..];
-        Command::new(git_command).args(git_args).output()
+        let strip_args = git_args
+            .iter()
+            .map(|arg| arg.replace("\n", "").to_string()) // Change the type to String
+            .collect::<Vec<String>>(); // Change the type to Vec<String>
+        debug!("git command: {}, git args: {:#?}", git_command, strip_args);
+        Command::new(git_command).args(strip_args).output()
     }
     fn run_command_and_check_code(&self, command: &str) -> Vec<u8> {
         if let Ok(output) = self.run_git_command_with_string(command) {
@@ -128,9 +147,19 @@ impl GitFlowCommandFunc for GitFlowCommand {
                 }
             }
         }
-        let in_config_labels = current_labels.iter().filter(|label| choice_labels.contains(label)).collect::<Vec<&String>>();
-        let covert_config_labels = in_config_labels.iter().map(|label| label.as_str()).collect::<Vec<&str>>().join(",");
-        let label_msg = format!("选择你想要切换到的标签, 当前 Issue Id: [{}] 当前 Labels: [{}]", self.id, covert_config_labels);
+        let in_config_labels = current_labels
+            .iter()
+            .filter(|label| choice_labels.contains(label))
+            .collect::<Vec<&String>>();
+        let covert_config_labels = in_config_labels
+            .iter()
+            .map(|label| label.as_str())
+            .collect::<Vec<&str>>()
+            .join(",");
+        let label_msg = format!(
+            "选择你想要切换到的标签, 当前 Issue Id: [{}] 当前 Labels: [{}]",
+            self.id, covert_config_labels
+        );
         if let Ok(choice) = Select::new(&label_msg, choice_labels.clone()).prompt() {
             info!("选择了 {}", choice);
             self.run_command_and_check_code(
@@ -198,8 +227,8 @@ mod tests {
     }
     #[test]
     fn test_branch_re() {
-        use regex::Regex;
         use crate::config;
+        use regex::Regex;
         let config = config::load_config(config::CONFIG_PATH).unwrap();
         use crate::parse_branch_issue_id;
         let re = Regex::new(r".*issue#?(\d+).*").unwrap();
@@ -207,7 +236,7 @@ mod tests {
         if re.is_match(&branch_name) {
             let caps = re.captures(&branch_name).unwrap();
             println!("{:?}", caps.get(1).unwrap().as_str());
-        }else {
+        } else {
             println!("no match");
             std::process::exit(1);
         }
